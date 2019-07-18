@@ -24,9 +24,9 @@ mpfr_t* mpfr_triangular_inverse(mpfr_t* A, int dim, mpfr_prec_t prec) {
      *
      *           A[i, 0] * res[0, 1] + A[i, k] * res[k, j] + ... + A[i, i] * res[i, k] = delta(i, k)
      *
-     *	   A[i, i] * res[i, j]  = -(A[i, 0] * res[0, j] + ... + A[i, k] * res[k, j]
-     *	                          + A[i, i - 1] * res[i - 1, j])
-     *	                        = \sum_{k = j}^{i - 1} A[i, k] * res[k, j]
+     *           A[i, i] * res[i, j]  = -(A[i, 0] * res[0, j] + ... + A[i, k] * res[k, j]
+     *                                  + A[i, i - 1] * res[i - 1, j])
+     *                                = \sum_{k = j}^{i - 1} A[i, k] * res[k, j]
      *
      * */
     for (int i = 0; i < dim; i++) {

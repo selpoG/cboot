@@ -14,8 +14,8 @@ cdef extern from "sage/cboot/partial_fraction.h":
     mpfr_t* fast_partial_fraction_c(mpfr_t* pole_locations, int* double_or_single, int expected_result_length, mpfr_prec_t prec)
 
 cdef extern from "sage/cboot/chol_and_inverse.h":
-    mpfr_t* mpfr_triangular_inverse(mpfr_t* A, int dim,mpfr_prec_t prec)
-    mpfr_t* mpfr_cholesky(mpfr_t* A, int dim,mpfr_prec_t prec)
+    mpfr_t* mpfr_triangular_inverse(mpfr_t* A, int dim, mpfr_prec_t prec)
+    mpfr_t* mpfr_cholesky(mpfr_t* A, int dim, mpfr_prec_t prec)
     mpfr_t* form_anti_band(mpfr_t* ab_vector, int dim, mpfr_prec_t prec)
 
 cdef extern from "sage/cboot/context_variables.h":
@@ -24,7 +24,7 @@ cdef extern from "sage/cboot/context_variables.h":
     cb_context context_construct(long nMax, mpfr_prec_t prec, int Lambda)
     void clear_cb_context(cb_context context)
 #
-#cdef class clevel_context:
+# cdef class clevel_context:
 #    cdef cb_context context
 #    cdef public np.ndarray zrmat
 #

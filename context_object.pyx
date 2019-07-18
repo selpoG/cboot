@@ -9,12 +9,17 @@ from sage.functions.gamma import gamma
 from sage.rings.real_mpfr import RR
 import copy
 import re
-
-def __mult_poles(poles,pref_const,context):
-    return reduce(lambda x,y:x*y,[(context.Delta -z)**poles[z] for z in poles], pref_const)
+from functools import reduce
 
 
-def z_zbar_derivative_to_x_y_derivative_Matrix_m(Lambda,field=RealField(400)):
+def __mult_poles(poles, pref_const, context):
+    return reduce(lambda x,
+                  y: x * y,
+                  [(context.Delta - z)**poles[z] for z in poles],
+                  pref_const)
+
+
+def z_zbar_derivative_to_x_y_derivative_Matrix_m(Lambda, field=RealField(400)):
     """
     Transforms the array {D_{z} ^i D_{zbar} ^j f(z,zbar)}_{i+j <= Lambda }
     with the property f(z,zbar)=f(zbar,z) to
@@ -25,37 +30,42 @@ def z_zbar_derivative_to_x_y_derivative_Matrix_m(Lambda,field=RealField(400)):
     f, D_z f, D_z ^2 f, \cdots, D_z ^{\Lambda} f, D_{zbar} f, D_{zbar} D_z f,
     \cdots D_{zbar} D_z^{\Lambda-1} f \cdots
     """
-    q=field['x']
-    if (Lambda%2):
-        dimG=(Lambda+1)*(Lambda+3)/4
+    q = field['x']
+    if (Lambda % 2):
+        dimG = (Lambda + 1) * (Lambda + 3) / 4
     else:
-        dimG=((Lambda+2)**2)/4
-    tempres={}
-    result=np.ndarray(dimG**2,dtype='O')
-    result[:]=field(0)
-    result=result.reshape(dimG,dimG)
-    for i in range(0,Lambda//2+2):
-        for j in range(i+1,Lambda+2-i):
-            temp=((q('x+1')**j)*(q('x-1')**i)+(q('x-1')**j)*(q('x+1')**i)).padded_list()
-            tempres.update({repr(i)+","+repr(j):temp})
-            column_position=(Lambda+2-i)*i+(j-i-1)
+        dimG = ((Lambda + 2)**2) / 4
+    tempres = {}
+    result = np.ndarray(dimG**2, dtype='O')
+    result[:] = field(0)
+    result = result.reshape(dimG, dimG)
+    for i in range(0, Lambda // 2 + 2):
+        for j in range(i + 1, Lambda + 2 - i):
+            temp = ((q('x+1')**j) * (q('x-1')**i) + (q('x-1')**j)
+                    * (q('x+1')**i)).padded_list()
+            tempres.update({repr(i) + "," + repr(j): temp})
+            column_position = (Lambda + 2 - i) * i + (j - i - 1)
             # z^i bz^j - > x^m y^{2n}
             # (m+2 n)=(i+j)
-            if ((i+j)%2):
+            if ((i + j) % 2):
                 # x^m in (0,2,...)
                 # n=(i+j-m)/2
                 # 0,1,dots,Lambda,0,dots,Lambda-2,
                 # \sum_i=0^{n-1}(Lambda+1 -i) + m
                 # (Lambda+1- (i+j-x-1)/2)*(i+j-x)
-                xypositions=([(Lambda+1-(i+j-x-1)/2)*(i+j-x-1)/2+x for x in range(0,len(temp),2)])
-                coeff_with_position=zip(xypositions,temp[0::2])
+                xypositions = ([(Lambda + 1 - (i + j - x - 1) / 2) * (i + j - x - 1) /
+                                2 + x for x in range(0, len(temp), 2)])
+                coeff_with_position = zip(xypositions, temp[0::2])
             else:
-                xypositions=([(Lambda+2-(i+j-x-1)/2)*(i+j-x-1)/2+x for x in range(1,len(temp),2)])
-                coeff_with_position=zip(xypositions,temp[1::2])
-            [result[column_position].__setitem__(int(x[0]),field(x[1]/2)) for x in coeff_with_position]
+                xypositions = ([(Lambda + 2 - (i + j - x - 1) / 2) * (i + j - x - 1) /
+                                2 + x for x in range(1, len(temp), 2)])
+                coeff_with_position = zip(xypositions, temp[1::2])
+            [result[column_position].__setitem__(
+                int(x[0]), field(x[1] / 2)) for x in coeff_with_position]
     return result.transpose()
 
-def z_zbar_derivative_to_x_y_derivative_Matrix(Lambda,field=RealField(400)):
+
+def z_zbar_derivative_to_x_y_derivative_Matrix(Lambda, field=RealField(400)):
     """
     z_zbar_derivative_to_x_y_derivative_Matrix(Lambda,field=RealField(400))
     returns the matrix to convert the derivatives of real function
@@ -63,25 +73,30 @@ def z_zbar_derivative_to_x_y_derivative_Matrix(Lambda,field=RealField(400)):
     Assuming the derivatives to be ordered as
     f, D_z f, D_z
     """
-    q=field['x']
-    if (Lambda%2):
-        dimG=(Lambda+1)*(Lambda+3)/4
+    q = field['x']
+    if (Lambda % 2):
+        dimG = (Lambda + 1) * (Lambda + 3) / 4
     else:
-        dimG=((Lambda+2)**2)/4
-    result=np.ndarray(dimG**2,dtype='O')
-    result=result.reshape(dimG,dimG)
-    set_ij_elements = lambda x,a,b,i,j: result[((Lambda+2-a)*a+b)].__setitem__(((Lambda+2-i)*i+j),x)
-    for i in range(0,(Lambda//2+1)):
-        for j in range(i,Lambda+1-i):
-            if (i==j):
-                temp=((q('x+1')**j)*(q('x-1')**i)).padded_list()
+        dimG = ((Lambda + 2)**2) / 4
+    result = np.ndarray(dimG**2, dtype='O')
+    result = result.reshape(dimG, dimG)
+    def set_ij_elements(x, a, b, i, j): return result[(
+        (Lambda + 2 - a) * a + b)].__setitem__(((Lambda + 2 - i) * i + j), x)
+    for i in range(0, (Lambda // 2 + 1)):
+        for j in range(i, Lambda + 1 - i):
+            if (i == j):
+                temp = ((q('x+1')**j) * (q('x-1')**i)).padded_list()
             else:
-                temp=((q('x+1')**j)*(q('x-1')**i)+(q('x-1')**j)*(q('x+1')**i)).padded_list()
-            if((i+j)%2):
-                map(lambda x, y:set_ij_elements(x,(i+j-y)/2,y,i,j-i),temp[1::2],range(1,len(temp),2))
+                temp = ((q('x+1')**j) * (q('x-1')**i) + (q('x-1')**j)
+                        * (q('x+1')**i)).padded_list()
+            if((i + j) % 2):
+                map(lambda x, y: set_ij_elements(x, (i + j - y) / 2,
+                                                 y, i, j - i), temp[1::2], range(1, len(temp), 2))
             else:
-                map(lambda x, y:set_ij_elements(x,(i+j-y)/2,y,i,j-i),temp[0::2],range(0,len(temp),2))
-    return np.array(map(lambda x: 0 if x==None else x, result.flatten())).reshape(dimG,dimG)
+                map(lambda x, y: set_ij_elements(x, (i + j - y) / 2,
+                                                 y, i, j - i), temp[0::2], range(0, len(temp), 2))
+    return np.array(map(lambda x: 0 if x is None else x,
+                        result.flatten())).reshape(dimG, dimG)
 
 
 cdef class cb_universal_context:
@@ -210,7 +225,8 @@ cdef class cb_universal_context:
         return SDP(normalization,objective,pvm,label=label,context=self)
 
     def positive_matrix_with_prefactor(self,pref,array):
-        return positive_matrix_with_prefactor(pref,array,self)
+        return positive_matrix_with_prefactor(pref, array, self)
+
     def damped_rational(self,poles,c):
         return damped_rational(poles,4*self.rho,c,self)
 
@@ -412,7 +428,8 @@ cdef class cb_universal_context:
             if isinstance(y,prefactor_numerator):
                 return prefactor_numerator(y.prefactor,np.dot(x,y.matrix),self)
             else:
-                return np.dot(x,y)
+                return np.dot(x, y)
+
 #   def concatenate(self,pns):
 #        if not isinstance(pns,list):
 #            raise TypeError("argument must be a list")
@@ -479,6 +496,7 @@ cpdef fast_partial_fraction(pole_data,prec):
     free(result)
     return result_py
 
+
 cpdef simple_or_double_pole_integral(x_power_max,base,pole_position, order_of_pole, mpfr_prec_t prec):
     a=RealField(2*prec)(pole_position)
     b=RealField(2*prec)(base)
@@ -515,6 +533,7 @@ cpdef simple_or_double_pole_integral(x_power_max,base,pole_position, order_of_po
         mpfr_clear(result[i]);
     free(result)
     return result_py
+
 
 cdef mpfr_t* pole_integral_c(x_power_max,base, pole_position, order_of_pole, mpfr_prec_t prec):
     a=RealField(2*prec)(pole_position)
@@ -616,6 +635,7 @@ cpdef prefactor_integral(pole_data, base, int x_power, prec,c=1):
     free(decompose_coeffs)
     return RealField(prec)(c)*result
 
+
 cpdef anti_band_cholesky_inverse(v,n_order_max,prec):
     field=RealField(prec)
     n_max=int(n_order_max)
@@ -662,85 +682,109 @@ cpdef anti_band_cholesky_inverse(v,n_order_max,prec):
 
 
 def max_index(_v):
-    return sorted(map(lambda x,y:[x,y],_v,range(0,len(_v))),key=lambda x:x[0].abs(),reverse=True)[0][1]
+    return sorted(map(lambda x, y: [x, y], _v, range(
+        0, len(_v))), key=lambda x: x[0].abs(), reverse=True)[0][1]
 
-def normalizing_component_subtract(m,normalizing_vector):
+
+def normalizing_component_subtract(m, normalizing_vector):
     __index = max_index(normalizing_vector)
-    __deleted_normalizing_vector = (1/normalizing_vector[__index])*np.delete(normalizing_vector,__index)
+    __deleted_normalizing_vector = (
+        1 / normalizing_vector[__index]) * np.delete(normalizing_vector, __index)
     if not (len(m) == len(normalizing_vector)):
-        raise RuntimeError("length of normalizing vector and target object must be equal.")
-    return np.insert(np.delete(m,__index,0)-__deleted_normalizing_vector*m[__index],0,m[__index]/normalizing_vector[__index])
+        raise RuntimeError(
+            "length of normalizing vector and target object must be equal.")
+    return np.insert(
+        np.delete(
+            m,
+            __index,
+            0) -
+        __deleted_normalizing_vector *
+        m[__index],
+        0,
+        m[__index] /
+        normalizing_vector[__index])
 
-def recover_functional(alpha,normalizing_vector):
+
+def recover_functional(alpha, normalizing_vector):
     __index = max_index(normalizing_vector)
-    __deleted_normalizing_vector = (1/normalizing_vector[__index])*np.delete(normalizing_vector,__index)
-    if not (len(alpha) == (len(normalizing_vector)-1)):
-        raise RuntimeError("length of normalizing vector and target object must be equal.")
-    alpha_deleted=(1/normalizing_vector[__index])-alpha.dot(__deleted_normalizing_vector)
-    return np.insert(alpha,__index,alpha_deleted)
+    __deleted_normalizing_vector = (
+        1 / normalizing_vector[__index]) * np.delete(normalizing_vector, __index)
+    if not (len(alpha) == (len(normalizing_vector) - 1)):
+        raise RuntimeError(
+            "length of normalizing vector and target object must be equal.")
+    alpha_deleted = (
+        1 / normalizing_vector[__index]) - alpha.dot(__deleted_normalizing_vector)
+    return np.insert(alpha, __index, alpha_deleted)
 
 
-find_y=re.compile(r'y *= *\{([^\}]+)\}')
+find_y = re.compile(r'y *= *\{([^\}]+)\}')
 
-def efm_from_sdpb_output(file_path,normalizing_vector,context):
-    data_stream=open(file_path)
-    data_text=data_stream.read()
+
+def efm_from_sdpb_output(file_path, normalizing_vector, context):
+    data_stream = open(file_path)
+    data_text = data_stream.read()
     data_stream.close()
-    yres_text=find_y.search(data_text).groups()[0]
-    vector_text=re.split(r', ', yres_text)
-    y_result=np.array([context.field(x) for x in vector_text])
-    return recover_functional(y_result,normalizing_vector)
+    yres_text = find_y.search(data_text).groups()[0]
+    vector_text = re.split(r', ', yres_text)
+    y_result = np.array([context.field(x) for x in vector_text])
+    return recover_functional(y_result, normalizing_vector)
 
 
-def write_real_num(file_stream,real_num,tag):
-    file_stream.write(("<"+tag+">"))
+def write_real_num(file_stream, real_num, tag):
+    file_stream.write(("<" + tag + ">"))
     file_stream.write(repr(real_num))
-    file_stream.write(("</"+tag+">\n"))
+    file_stream.write(("</" + tag + ">\n"))
 
-def write_vector(file_stream,name,vector):
-    file_stream.write("<"+name+">\n")
-    map(lambda x:write_real_num(file_stream,x,"elt"),vector)
-    file_stream.write("</"+name+">\n")
 
-def write_polynomial(file_stream,polynomial):
+def write_vector(file_stream, name, vector):
+    file_stream.write("<" + name + ">\n")
+    map(lambda x: write_real_num(file_stream, x, "elt"), vector)
+    file_stream.write("</" + name + ">\n")
+
+
+def write_polynomial(file_stream, polynomial):
     file_stream.write("<polynomial>\n")
     try:
-        __temp=polynomial.list()
+        __temp = polynomial.list()
     except AttributeError:
-        __temp=[polynomial]
+        __temp = [polynomial]
     #map(lambda x:write_real_num(file_stream,x,"coeff"), (lambda y: [0] if y ==[] else y )(polynomial.list()))
-    if __temp==[]:
-        __temp=[0]
-    map(lambda x:write_real_num(file_stream,x,"coeff"),__temp)
+    if __temp == []:
+        __temp = [0]
+    map(lambda x: write_real_num(file_stream, x, "coeff"), __temp)
     file_stream.write("</polynomial>\n")
 
-def write_polynomial_vector(file_stream,polynomialVector):
+
+def write_polynomial_vector(file_stream, polynomialVector):
     file_stream.write("<polynomialVector>\n")
-    map(lambda x:write_polynomial(file_stream,x),polynomialVector)
+    map(lambda x: write_polynomial(file_stream, x), polynomialVector)
     file_stream.write("</polynomialVector>\n")
 
-def laguerre_sample_points(n,field,rho):
-    return map(lambda k:(field(3.141592))**2*(-1+4*k)**2/(-64*n*(4*rho).log()),range(0,n))
 
-def format_poleinfo(poles,context=None):
-    if context==None:
-        field=lambda x:x
+def laguerre_sample_points(n, field, rho):
+    return map(lambda k: (field(3.141592))**2 * (-1 + 4 * k)
+               ** 2 / (-64 * n * (4 * rho).log()), range(0, n))
+
+
+def format_poleinfo(poles, context=None):
+    if context is None:
+        def field(x): return x
     else:
-        field=context.field
-    if isinstance(poles,dict):
-        res=[[field(x),poles[x]] for x in poles]
+        field = context.field
+    if isinstance(poles, dict):
+        res = [[field(x), poles[x]] for x in poles]
         return dict(res)
-    elif isinstance(poles,list):
-        if poles==[]:
+    elif isinstance(poles, list):
+        if poles == []:
             return {}
-        elif not isinstance(poles[0],list):
-            m=dict([[x,1] for x in poles])
+        elif not isinstance(poles[0], list):
+            m = dict([[x, 1] for x in poles])
             for x in m:
-                m[x]=poles.count(x)
-            return dict([[field(x),m[x]] for x in m])
-        elif len(poles[0])==2:
+                m[x] = poles.count(x)
+            return dict([[field(x), m[x]] for x in m])
+        elif len(poles[0]) == 2:
             try:
-                res=[[field(x[0]),x[1]] for x in poles]
+                res = [[field(x[0]), x[1]] for x in poles]
                 return dict(res)
             except TypeError:
                 raise TypeError("unreadable initialization for poles")
@@ -748,10 +792,10 @@ def format_poleinfo(poles,context=None):
             raise TypeError("unreadable initialization for poles")
 
 
-def __dict_add(dict1,dict2):
-    return dict([(x,dict1[x]+dict2[x]) for x in dict2 if x in dict1]\
-            +[(x,dict2[x]) for x in dict2 if x not in dict1]\
-            +[(x,dict1[x]) for x in dict1 if x not in dict2])
+def __dict_add(dict1, dict2):
+    return dict([(x, dict1[x] + dict2[x]) for x in dict2 if x in dict1]
+                + [(x, dict2[x]) for x in dict2 if x not in dict1]
+                + [(x, dict1[x]) for x in dict1 if x not in dict2])
 
 
 cdef class damped_rational:
@@ -769,7 +813,8 @@ cdef class damped_rational:
         return damped_rational(new_poles,self.base,new_const,self.context)
 
     def __call__(self,x):
-        return self.pref_constant*(self.base**x)*(1/reduce(lambda z,w:z*w,[(x-y)**(self.poles[y]) for y in self.poles.keys()],1))
+        return self.pref_constant * (self.base ** x) * (1 / reduce(lambda z, w: z * w, [(x - y) ** (self.poles[y]) for y in self.poles.keys()], 1))
+
     def orthogonal_polynomial(self,order):
         passed_poles=[[x,self.poles[x]] for x in self.poles.keys()]
         return anti_band_cholesky_inverse(prefactor_integral(passed_poles,self.base, order, self.context.precision, self.pref_constant), order//2,self.context.precision)
@@ -798,6 +843,7 @@ cdef class damped_rational:
             else:
                 res_poles.update({x:location_new[x]})
         return damped_rational(res_poles,self.base,self.pref_constant,self.context)
+
     def remove_poles(self,location):
         res_poles=copy.copy(self.poles)
         location_new=format_poleinfo(location)
@@ -814,7 +860,7 @@ cdef class damped_rational:
                 raise RuntimeError("could not delete pole")
         return damped_rational(res_poles,self.base,self.pref_constant,self.context)
 
-    #def lcm_new(self,p):
+    # def lcm_new(self,p):
     def lcm(self,p):
         if isinstance(p,damped_rational):
             if not self.base==p.base:
@@ -935,8 +981,6 @@ cdef class positive_matrix_with_prefactor:
         return prefactor_numerator(self.prefactor,new_b,self.context)
 
 
-
-
 cdef class prefactor_numerator(positive_matrix_with_prefactor):
     def add_poles(self,poles):
         new_pref=self.prefactor.add_poles(poles)
@@ -1005,7 +1049,6 @@ cdef class prefactor_numerator(positive_matrix_with_prefactor):
                 + remnant_poly2*other.matrix
         return prefactor_numerator(new_pref,new_matrix,self.context)
 
-
 #    def __add__(self,other):
 #        if not isinstance(other,prefactor_numerator):
 #            raise TypeError("must be added to another prefactor_numerator")
@@ -1060,43 +1103,52 @@ cdef class prefactor_numerator(positive_matrix_with_prefactor):
         return repr(self.prefactor)+"\n*"+repr(self.matrix)
 
 
-def find_local_minima(pol,label,field=RR,context=None):
-    solpol=pol.derivative()
-    solpol2=solpol.derivative()*pol - solpol**2
-    sols=solpol.roots()
-    sols=[x[0] for x in sols if x[0]>0 ]
-    minsols=[[label,RR(x)] for x in sols if (solpol2(x) > 0)]
+def find_local_minima(pol, label, field=RR, context=None):
+    solpol = pol.derivative()
+    solpol2 = solpol.derivative() * pol - solpol**2
+    sols = solpol.roots()
+    sols = [x[0] for x in sols if x[0] > 0]
+    minsols = [[label, RR(x)] for x in sols if (solpol2(x) > 0)]
     return minsols
 
-def functional_to_spectra(ef_path,problem,context,label=None):
-    norm=problem.normalization
-    pvm=problem.pvm
-    alpha=efm_from_sdpb_output(ef_path,norm,context)
-    polys=[Matrix(x.matrix.dot(alpha)).det() for x in pvm]
-    if label==None:
-        label=range(0,len(polys))
-    efmread=map(lambda x: find_local_minima(x[0],x[1]),zip(polys,label))
+
+def functional_to_spectra(ef_path, problem, context, label=None):
+    norm = problem.normalization
+    pvm = problem.pvm
+    alpha = efm_from_sdpb_output(ef_path, norm, context)
+    polys = [Matrix(x.matrix.dot(alpha)).det() for x in pvm]
+    if label is None:
+        label = range(0, len(polys))
+    efmread = map(lambda x: find_local_minima(x[0], x[1]), zip(polys, label))
     return efmread
 
 
 class SDP:
-    def __init__(self,normalization,objective,pvm,label=None,context=None):
-        self.pvm = [x.reshape() if (isinstance(x,positive_matrix_with_prefactor)\
-                or isinstance(x,prefactor_numerator)) \
-                else
-                context.vector_to_prefactor_numerator(x).reshape() \
-                for x in pvm]
-        self.normalization=normalization
-        self.objective=objective
-        self.label=label
-        self.context=context
-    def write(self,file_path):
-        file_stream=open(file_path,'w')
+    def __init__(
+            self,
+            normalization,
+            objective,
+            pvm,
+            label=None,
+            context=None):
+        self.pvm = [x.reshape() if (isinstance(x, positive_matrix_with_prefactor)
+                                    or isinstance(x, prefactor_numerator))
+                    else
+                    context.vector_to_prefactor_numerator(x).reshape()
+                    for x in pvm]
+        self.normalization = normalization
+        self.objective = objective
+        self.label = label
+        self.context = context
+
+    def write(self, file_path):
+        file_stream = open(file_path, 'w')
         file_stream.write("<sdp>\n")
-        write_vector(file_stream,"objective",normalizing_component_subtract(self.objective,self.normalization))
+        write_vector(file_stream, "objective", normalizing_component_subtract(
+            self.objective, self.normalization))
         file_stream.write("<polynomialVectorMatrices>\n")
         for x in self.pvm:
-            x.write(file_stream,self.normalization)
+            x.write(file_stream, self.normalization)
         file_stream.write("</polynomialVectorMatrices>\n")
         file_stream.write("</sdp>\n")
         file_stream.close()

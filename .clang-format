@@ -1,0 +1,8 @@
+---
+Language: Cpp
+BasedOnStyle: Google
+ColumnLimit: 120
+IndentWidth: 4
+PointerAlignment: Left
+TabWidth: 4
+...

@@ -42,7 +42,7 @@ class k_poleData:
         return self.context.field(1 + self.k) / 2
 
     def coeff(self):
-        local_sign = -1 if self.k % 2 else 1
+        local_sign = -1 if self.k % 2 != 0 else 1
         p1 = self.context.pochhammer(1, self.k)
         p2 = self.context.pochhammer((1 - self.k + 2 * self.a) / 2, self.k)
         p3 = self.context.pochhammer((1 - self.k + 2 * self.b) / 2, self.k)
@@ -262,7 +262,7 @@ cdef class scalar_cb_context_generic(cb_universal_context):
         array = gBlock_full(<mpfr_t>(<RealNumber>self.epsilon).value, <mpfr_t>(<RealNumber>ell_c).value, <mpfr_t>(<RealNumber>Delta_c).value, <mpfr_t>(<RealNumber>S_c).value, <mpfr_t>(<RealNumber>P_c).value, <cb_context>self.c_context)
         sig_off()
 
-        if self.Lambda % 2:
+        if self.Lambda % 2 != 0:
             dimGBlock = ((self.Lambda + 1) * (self.Lambda + 3) // 4)
         else:
             dimGBlock = ((self.Lambda + 2) ** 2) // 4
@@ -286,7 +286,7 @@ cdef class scalar_cb_context_generic(cb_universal_context):
         """
         local_c2 = (ell * (ell + 2 * self.epsilon) + Delta * (Delta - 2 - 2 * self.epsilon))
         aligned_index = lambda y_del, x_del: (self.Lambda + 2 - y_del) * y_del + x_del
-        if self.Lambda % 2:
+        if self.Lambda % 2 != 0:
             local_dim_answer = (self.Lambda + 1) * (self.Lambda + 3) // 4
         else:
             local_dim_answer = (self.Lambda + 2) * (self.Lambda + 2) // 4
@@ -397,7 +397,7 @@ class poleData:
         raise NotImplementedError
 
     def coeff(self):
-        local_sign = -1 if self.k % 2 else 1
+        local_sign = -1 if self.k % 2 != 0 else 1
         p0 = self.context.pochhammer(1, self.k)
         common_factor = -local_sign * self.k / (p0 ** 2)
         if self.type == 1:
@@ -574,12 +574,12 @@ def context_for_scalar(epsilon=0.5, Lambda=15, Prec=800, nMax=250):
 def zzbar_anti_symm_to_xy_matrix(Lambda, field=RealField(400)):
     q = ZZ['x']
 
-    if Lambda % 2:
+    if Lambda % 2 != 0:
         dimG = (Lambda + 1) * (Lambda + 3) // 4
     else:
         dimG = ((Lambda + 2) ** 2) // 4
     tempres = {}
-    if Lambda % 2:
+    if Lambda % 2 != 0:
         dimG = (Lambda + 1) * (Lambda + 3) // 4
     else:
         dimG = ((Lambda + 2) ** 2) // 4
@@ -592,7 +592,7 @@ def zzbar_anti_symm_to_xy_matrix(Lambda, field=RealField(400)):
                     * (q('x + 1') ** i)).padded_list()
             tempres.update({repr(i) + "," + repr(j): temp})
             column_position = (Lambda + 2 - i) * i + (j - i - 1)
-            if (i + j) % 2:
+            if (i + j) % 2 != 0:
                 xypositions = ([(Lambda + 2 - (i + j - x - 1) // 2) * (i + j - x - 1) //
                                 2 + x for x in range(0, len(temp), 2)])
                 coeff_with_position = zip(xypositions, temp[0::2])

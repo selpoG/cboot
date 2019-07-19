@@ -31,11 +31,10 @@ def z_zbar_derivative_to_x_y_derivative_Matrix_m(Lambda, field=RealField(400)):
     \cdots D_{zbar} D_z ^ {\Lambda - 1} f \cdots
     """
     q = field['x']
-    if Lambda % 2:
+    if Lambda % 2 != 0:
         dimG = (Lambda + 1) * (Lambda + 3) // 4
     else:
         dimG = ((Lambda + 2) ** 2) // 4
-    tempres = {}
     result = np.ndarray(dimG ** 2, dtype='O')
     result[:] = field(0)
     result = result.reshape(dimG, dimG)
@@ -43,25 +42,19 @@ def z_zbar_derivative_to_x_y_derivative_Matrix_m(Lambda, field=RealField(400)):
         for j in range(i + 1, Lambda + 2 - i):
             temp = ((q('x + 1') ** j) * (q('x - 1') ** i) +
                     (q('x - 1') ** j) * (q('x + 1') ** i)).padded_list()
-            tempres.update({repr(i) + "," + repr(j): temp})
             column_position = (Lambda + 2 - i) * i + (j - i - 1)
             # z ^ i bz ^ j -> x ^ m y ^ {2 n}
             # (m + 2 n) = (i + j)
-            if (i + j) % 2:
-                # x^m in (0, 2, ...)
-                # n = (i + j - m) / 2
-                # 0, 1, dots, Lambda, 0, dots, Lambda - 2,
-                # \sum_{i = 0}^{n - 1} (Lambda + 1 - i) + m
-                # (Lambda + 1 - (i + j - x - 1) / 2) * (i + j - x)
-                xypositions = ([(Lambda + 1 - (i + j - x - 1) // 2) * (i + j - x - 1) //
-                                2 + x for x in range(0, len(temp), 2)])
-                coeff_with_position = zip(xypositions, temp[0::2])
-            else:
-                xypositions = ([(Lambda + 2 - (i + j - x - 1) // 2) * (i + j - x - 1) //
-                                2 + x for x in range(1, len(temp), 2)])
-                coeff_with_position = zip(xypositions, temp[1::2])
-            [result[column_position].__setitem__(
-                int(x[0]), field(x[1] / 2)) for x in coeff_with_position]
+            parity_of_x = (i + j + 1) % 2
+            # x^m in (0, 2, ...)
+            # n = (i + j - m) / 2
+            # 0, 1, dots, Lambda, 0, dots, Lambda - 2,
+            # \sum_{i = 0}^{n - 1} (Lambda + 1 - i) + m
+            # (Lambda + 1 - (i + j - x - 1) / 2) * (i + j - x)
+            xypositions = [(Lambda + 1 + parity_of_x - (i + j - x - 1) // 2) * (i + j - x - 1) //
+                            2 + x for x in range(parity_of_x, len(temp), 2)]
+            for x in zip(xypositions, temp[parity_of_x::2]):
+                result[column_position][int(x[0])] = field(x[1] / 2)
     return result.transpose()
 
 
@@ -74,27 +67,25 @@ def z_zbar_derivative_to_x_y_derivative_Matrix(Lambda, field=RealField(400)):
     f, D_z f, D_z
     """
     q = field['x']
-    if Lambda % 2:
+    if Lambda % 2 != 0:
         dimG = (Lambda + 1) * (Lambda + 3) // 4
     else:
         dimG = ((Lambda + 2) ** 2) // 4
     result = np.ndarray(dimG ** 2, dtype='O')
     result = result.reshape(dimG, dimG)
-    def set_ij_elements(x, a, b, i, j): return result[(
-        (Lambda + 2 - a) * a + b)].__setitem__(((Lambda + 2 - i) * i + j), x)
+    def set_ij_elements(x, a, b, i, j):
+        result[((Lambda + 2 - a) * a + b)][((Lambda + 2 - i) * i + j)] = x
     for i in range(0, (Lambda // 2 + 1)):
         for j in range(i, Lambda + 1 - i):
             if i == j:
                 temp = ((q('x + 1') ** j) * (q('x - 1') ** i)).padded_list()
             else:
                 temp = ((q('x + 1') ** j) * (q('x - 1') ** i) +
-                    (q('x - 1') ** j) * (q('x + 1') ** i)).padded_list()
-            if (i + j) % 2:
-                map(lambda x, y: set_ij_elements(x, (i + j - y) // 2,
-                                                 y, i, j - i), temp[1::2], range(1, len(temp), 2))
-            else:
-                map(lambda x, y: set_ij_elements(x, (i + j - y) // 2,
-                                                 y, i, j - i), temp[0::2], range(0, len(temp), 2))
+                        (q('x - 1') ** j) * (q('x + 1') ** i)).padded_list()
+            parity = (i + j) % 2
+            map(
+                lambda x, y: set_ij_elements(x, (i + j - y) // 2, y, i, j - i),
+                temp[parity::2], range(parity, len(temp), 2))
     return np.array(map(lambda x: 0 if x is None else x,
                         result.flatten())).reshape(dimG, dimG)
 
@@ -197,7 +188,7 @@ cdef class cb_universal_context:
         aligned_index = lambda x: (self.Lambda + 2 - x[0]) * x[0] + x[1]
         local_v = self.v_to_d(d)
         return ((self.field(1) / 4) ** d) * np.array(map(lambda i: (np.array(map(lambda m: local_v[aligned_index(i - m)] if ((i - m)[0] >= 0 and (i - m)[1] >= 0) else d.parent(0), self.index_list)))
-            , [x for x in self.index_list if x[1] % 2]))
+            , [x for x in self.index_list if x[1] % 2 != 0]))
 
     def v_to_d_and_symmetrizing_matrix(self, d):
         return self.F_plus_matrix(d)
@@ -216,7 +207,7 @@ cdef class cb_universal_context:
         aligned_index = lambda x: (self.Lambda + 2 - x[0]) * x[0] + x[1]
         local_v = self.v_to_d(d)
         return ((self.field(1) / 4) ** d) * np.array(map(lambda i: (np.array(map(lambda m: local_v[aligned_index(i - m)] if ((i - m)[0] >= 0 and (i - m)[1] >= 0) else d.parent(0), self.index_list)))
-            , [x for x in self.index_list if not x[1] % 2]))
+            , [x for x in self.index_list if x[1] % 2 == 0]))
 
     def univariate_func_prod(self, x, y):
         return np.array(map(lambda i: x[0:i + 1].dot(y[i::-1]), range(0, self.Lambda + 1)))
@@ -905,7 +896,7 @@ cdef class damped_rational:
                 output = output + ")"
             else:
                 output = output + "+" + repr(-x) + ")"
-            if not self.poles[x] == 1:
+            if self.poles[x] != 1:
                 output = output + "**" + repr(self.poles[x])
             output = output + "*"
         return output[:-1]
@@ -1129,8 +1120,8 @@ class SDP:
             pvm,
             label=None,
             context=None):
-        self.pvm = [x.reshape() if (isinstance(x, positive_matrix_with_prefactor)
-                                    or isinstance(x, prefactor_numerator))
+        self.pvm = [x.reshape()
+                    if isinstance(x, (positive_matrix_with_prefactor, prefactor_numerator))
                     else
                     context.vector_to_prefactor_numerator(x).reshape()
                     for x in pvm]

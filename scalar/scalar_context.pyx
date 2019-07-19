@@ -15,9 +15,8 @@ class k_poleData:
     chiral conformal blockm k_{\\beta, \\Delta_{1, 2}, \\Delta_{3, 4}} w.r.t. \\beta.
 
     k, ell has the same meaning, epsilon (here) = \\nu (there)
-    a = - \Delta_{12} / 2
-    b = + \Delta_{34} / 2
-
+    a = - \\Delta_{12} / 2
+    b = + \\Delta_{34} / 2
     """
 
     def __init__(self, k, a, b, context):
@@ -154,7 +153,7 @@ class g_rational_approx_data_two_d:
             approximate_poles)
 
     def prefactor(self):
-        __chiral_poles = self.chiral_approx_data.prefactor().poles.keys()
+        __chiral_poles = set(self.chiral_approx_data.prefactor().poles)
         __q = [2 * x + self.ell for x in __chiral_poles] + \
             [2 * x - self.ell for x in __chiral_poles]
         __q = sorted(__q, reverse=True)
@@ -199,6 +198,7 @@ cdef class scalar_cb_context_generic(cb_universal_context):
     Context object for the bootstrap.
     Frequently used quantities are stored here.
     """
+
     cdef public object epsilon
     def __init__(self, Lambda, Prec, nMax, epsilon):
         cb_universal_context.__init__(self, Lambda, Prec, nMax)
@@ -215,12 +215,10 @@ cdef class scalar_cb_context_generic(cb_universal_context):
         res = np.ndarray(self.Lambda + 1, dtype='O')
         for i in range(0, self.Lambda + 1):
             res[i] = <RealNumber>(<RealField_class>self.field)._new()
-            # res[i] = RealNumber.__new__(RealNumber)
             (<RealNumber>res[i])._parent = self.field
             mpfr_init2(<mpfr_t>(<RealNumber>res[i]).value, self.precision)
             mpfr_set(<mpfr_t>(<RealNumber>res[i]).value, array[i],  MPFR_RNDN)
             mpfr_clear(array[i])
-            # (<RealNumber>res[i]).init = 1
         free(array)
         return res
 
@@ -230,14 +228,12 @@ cdef class scalar_cb_context_generic(cb_universal_context):
         _array = h_asymptotic(<mpfr_t>(<RealNumber>self.epsilon).value,  <mpfr_t>(<RealNumber>S_c).value, <cb_context>(self.c_context))
         res = np.ndarray(self.Lambda + 1, dtype='O')
         for i in range(0, self.Lambda + 1):
-            # res[i] = RealNumber.__new__(RealNumber)
             res[i] = <RealNumber>(<RealField_class>self.field)._new()
 
             (<RealNumber>res[i])._parent = self.field
             mpfr_init2(<mpfr_t>(<RealNumber>res[i]).value, <mpfr_prec_t>self.precision)
             mpfr_set(<mpfr_t>(<RealNumber>res[i]).value, _array[i],  MPFR_RNDN)
             mpfr_clear(_array[i])
-            # (<RealNumber>res[i]).init = 1
         return np.array(res)
 
     def gBlock(self, ell, Delta, Delta_1_2, Delta_3_4):
@@ -334,13 +330,12 @@ class poleData:
     """
     poleData(type, k, ell, a, b, context):
     A class containing the information about the poles and residues of
-    conformal block w.r.t. \Delta.
+    conformal block w.r.t. \\Delta.
 
     type = 1 or 2 or 3 refers to the rows of the Section 4, Table 1 of 1406.4858.
     k, ell has the same meaning, epsilon (here) = \\nu (there)
-    a = - \Delta_{12} / 2
-    b = + \Delta_{34} / 2
-
+    a = - \\Delta_{12} / 2
+    b = + \\Delta_{34} / 2
     """
 
     def __init__(self, type, k, ell, a, b, context):
@@ -562,13 +557,13 @@ def context_for_scalar(epsilon=0.5, Lambda=15, Prec=800, nMax=250):
     try:
         temp = Integer(epsilon)
         if temp == 0:
-            return scalar_cb_2d_context(Lambda, Prec, nMax, )
+            return scalar_cb_2d_context(Lambda, Prec, nMax)
         if temp == 1:
-            return scalar_cb_4d_context(Lambda, Prec, nMax, )
+            return scalar_cb_4d_context(Lambda, Prec, nMax)
         raise RuntimeError(
             "Sorry, space-time dimensions d={0} is unsupported. Create it yourself and let me know!".format(2 + 2 * epsilon))
     except TypeError:
-        return scalar_cb_context_generic(Lambda, Prec, nMax, epsilon, )
+        return scalar_cb_context_generic(Lambda, Prec, nMax, epsilon)
 
 
 def zzbar_anti_symm_to_xy_matrix(Lambda, field=RealField(400)):
@@ -578,7 +573,6 @@ def zzbar_anti_symm_to_xy_matrix(Lambda, field=RealField(400)):
         dimG = (Lambda + 1) * (Lambda + 3) // 4
     else:
         dimG = ((Lambda + 2) ** 2) // 4
-    tempres = {}
     if Lambda % 2 != 0:
         dimG = (Lambda + 1) * (Lambda + 3) // 4
     else:
@@ -590,20 +584,14 @@ def zzbar_anti_symm_to_xy_matrix(Lambda, field=RealField(400)):
         for j in range(i + 1, Lambda + 2 - i):
             temp = ((q('x + 1') ** j) * (q('x - 1') ** i) - (q('x - 1') ** j)
                     * (q('x + 1') ** i)).padded_list()
-            tempres.update({repr(i) + "," + repr(j): temp})
             column_position = (Lambda + 2 - i) * i + (j - i - 1)
-            if (i + j) % 2 != 0:
-                xypositions = ([(Lambda + 2 - (i + j - x - 1) // 2) * (i + j - x - 1) //
-                                2 + x for x in range(0, len(temp), 2)])
-                coeff_with_position = zip(xypositions, temp[0::2])
+            parity = (i + j + 1) % 2
+            xypositions = ([(Lambda + 2 - (i + j - x - 1) // 2) * (i + j - x - 1) //
+                            2 + x for x in range(parity, len(temp), 2)])
+            coeff_with_position = zip(xypositions, temp[parity::2])
 
-            else:
-                xypositions = ([(Lambda + 2 - (i + j - x - 1) // 2) * (i + j - x - 1) //
-                                2 + x for x in range(1, len(temp), 2)])
-                coeff_with_position = zip(xypositions, temp[1::2])
-
-            [result[column_position].__setitem__(
-                int(x[0]), field(x[1] / 2)) for x in coeff_with_position]
+            for x in coeff_with_position:
+                result[int(x[0])] = field(x[1] / 2)
 
     return result.transpose()
 
@@ -623,7 +611,6 @@ cdef class scalar_cb_2d_context(scalar_cb_context_generic):
             mpfr_init2(<mpfr_t>(<RealNumber>res[i]).value, <mpfr_prec_t>self.precision)
             mpfr_set(<mpfr_t>(<RealNumber>res[i]).value, _array[i],  MPFR_RNDN)
             mpfr_clear(_array[i])
-            # (<RealNumber>res[i]).init = 1
         return np.array(res)
 
     cpdef chiral_h_times_rho_to_n(self, long n, h, Delta_1_2=0, Delta_3_4=0):
@@ -706,7 +693,7 @@ class g_rational_approx_data_four_d:
             approximate_poles)
 
     def prefactor(self):
-        __chiral_poles = self.chiral_approx_data.prefactor().poles.keys()
+        __chiral_poles = set(self.chiral_approx_data.prefactor().poles)
         __q = [2 * x - self.ell for x in __chiral_poles] + \
             [2 * x + self.ell + 2 for x in __chiral_poles]
         __q = sorted(__q, reverse=True)

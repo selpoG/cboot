@@ -6,7 +6,7 @@ import numpy as np
 from sage.all import Matrix, is_square, sqrt
 cimport numpy as np
 from sage.functions.gamma import gamma
-from sage.rings.real_mpfr import RR
+from sage.rings.real_mpfr import RR, RealField_class, RealNumber
 import copy
 import re
 from functools import reduce
@@ -19,7 +19,16 @@ def __mult_poles(poles, pref_const, context):
         pref_const)
 
 
+def get_dimG(Lambda):
+    # type: int -> int
+    if Lambda % 2 != 0:
+        return (Lambda + 1) * (Lambda + 3) // 4
+    return ((Lambda + 2) ** 2) // 4
+
+
 def z_zbar_derivative_to_x_y_derivative_Matrix(Lambda, field=RealField(400)):
+    # type: (int, RealField_class) -> np.ndarray
+    # ret.shape = (dimG, dimG), ret.dtype = RealNumber
     """
     z_zbar_derivative_to_x_y_derivative_Matrix(Lambda, field=RealField(400))
     returns the matrix to convert the derivatives of real function
@@ -27,28 +36,24 @@ def z_zbar_derivative_to_x_y_derivative_Matrix(Lambda, field=RealField(400)):
     Assuming the derivatives to be ordered as
     f, D_z f, D_z
     """
+    if not isinstance(field, RealField_class):
+        raise TypeError("field must be instance of RealField_class, but it is {0}.".format(type(field)))
     q = field['x']
-    if Lambda % 2 != 0:
-        dimG = (Lambda + 1) * (Lambda + 3) // 4
-    else:
-        dimG = ((Lambda + 2) ** 2) // 4
-    result = np.ndarray(dimG ** 2, dtype='O')
-    result = result.reshape(dimG, dimG)
+    dimG = get_dimG(Lambda)
+    result = np.full((dimG, dimG), field(0))
     def set_ij_elements(x, a, b, i, j):
-        result[((Lambda + 2 - a) * a + b)][((Lambda + 2 - i) * i + j)] = x
-    for i in range(0, (Lambda // 2 + 1)):
+        result[(Lambda + 2 - a) * a + b][(Lambda + 2 - i) * i + j] = x
+    for i in range(Lambda // 2 + 1):
         for j in range(i, Lambda + 1 - i):
             if i == j:
-                temp = ((q('x + 1') ** j) * (q('x - 1') ** i)).padded_list()
+                temp = ((q('x + 1') ** i) * (q('x - 1') ** i)).padded_list()
             else:
                 temp = ((q('x + 1') ** j) * (q('x - 1') ** i) +
                         (q('x - 1') ** j) * (q('x + 1') ** i)).padded_list()
             parity = (i + j) % 2
-            map(
-                lambda x, y: set_ij_elements(x, (i + j - y) // 2, y, i, j - i),
-                temp[parity::2], range(parity, len(temp), 2))
-    return np.array(map(lambda x: 0 if x is None else x,
-                        result.flatten())).reshape(dimG, dimG)
+            for x, y in zip(temp[parity::2], range(parity, len(temp), 2)):
+                set_ij_elements(x, (i + j - y) // 2, y, i, j - i)
+    return result
 
 
 cdef class cb_universal_context:
@@ -67,11 +72,11 @@ cdef class cb_universal_context:
         self.Delta = self.Delta_Field('Delta') # type: sage.rings.polynomial.polynomial_real_mpfr_dense.PolynomialRealDense
         self.Lambda = Lambda
         self.maxExpansionOrder = nMax
-        self.rho_to_z_matrix = np.ndarray([Lambda + 1, Lambda + 1], dtype='O')
+        self.rho_to_z_matrix = np.ndarray((Lambda + 1, Lambda + 1), dtype='O')
         self.polynomial_vector_evaluate = np.vectorize(lambda x, value: self.Delta_Field(x)(value))
 
-        for i in range(0, Lambda + 1):
-            for j in range(0, Lambda + 1):
+        for i in range(Lambda + 1):
+            for j in range(Lambda + 1):
                 r = <RealNumber>(<RealField_class>self.field)._new()
                 r._parent = self.field
                 mpfr_init2(r.value, <mpfr_prec_t>Prec)
@@ -79,10 +84,9 @@ cdef class cb_universal_context:
                 self.rho_to_z_matrix[i][j] = r
 
     def __init__(self, int Lambda, mpfr_prec_t Prec, long nMax):
+        # type polynomial_vector_shift: np.vectorize()
         self.polynomial_vector_shift = np.vectorize(lambda x, shift: self.Delta_Field(x)(self.Delta + shift))
-        self.rho = 3 - 2 * self.field(2).sqrt()
-        self.convert_to_polynomial_vector = np.vectorize(lambda y: self.Delta_Field(y))
-        self.convert_to_real_vector = np.vectorize(lambda y: self.field(y))
+        self.rho = 3 - 2 * self.field(2).sqrt()  # 3 - 2 sqrt(2)
 
         self.zzbar_to_xy_marix = z_zbar_derivative_to_x_y_derivative_Matrix(self.Lambda, self.field)
         self.index_list = reduce(
@@ -131,7 +135,7 @@ cdef class cb_universal_context:
         for i in range(1, self.Lambda + 1):
             local_table.append(local_table[-1] * (d.parent(-2) * (d - d.parent(len(local_table) - 1))) / d.parent(len(local_table)))
 
-        for i in range(0, self.Lambda + 1):
+        for i in range(self.Lambda + 1):
             for j in range(i, self.Lambda + 1 - i):
                 local_res.append((local_table[i] * local_table[j] + local_table[j] * local_table[i]) / 2)
         return self.zzbar_to_xy_marix.dot(np.array(local_res))
@@ -163,7 +167,7 @@ cdef class cb_universal_context:
             , [x for x in self.index_list if x[1] % 2 == 0]))
 
     def univariate_func_prod(self, x, y):
-        return np.array(map(lambda i: x[0:i + 1].dot(y[i::-1]), range(0, self.Lambda + 1)))
+        return np.array(map(lambda i: x[0:i + 1].dot(y[i::-1]), range(self.Lambda + 1)))
 
     def SDP(self, normalization, objective, pvm):
         return SDP(normalization, objective, pvm, context=self)
@@ -182,7 +186,7 @@ cdef class cb_universal_context:
         (<RealNumber>result)._parent = self.field
         mpfr_init2(<mpfr_t>(<RealNumber> result).value, self.precision)
         mpfr_set_ui(<mpfr_t>(<RealNumber> result).value, 1, MPFR_RNDN)
-        for j in range(0, n):
+        for j in range(n):
             mpfr_add_ui(temp1, <mpfr_t>(<RealNumber>x_c).value, j, MPFR_RNDN)
             mpfr_mul(<mpfr_t>(<RealNumber>result).value, <mpfr_t>(<RealNumber>result).value, temp1, MPFR_RNDN)
         mpfr_clear(temp1)
@@ -259,7 +263,7 @@ cdef class cb_universal_context:
         res = np.ndarray((nrow, nrow, sum([dims[x] for x in dims])), dtype='O')
         for i in range(nrow):
             for j in range(nrow):
-                v = (bodies[(n, i, j)].reshape((dims[n], )) for n in range(0, nBlock))
+                v = (bodies[(n, i, j)].reshape((dims[n], )) for n in range(nBlock))
                 vv = np.concatenate(tuple(v))
                 res[i, j] = vv
         return prefactor_numerator(res_pref, res, self)
@@ -395,7 +399,7 @@ cpdef prefactor_integral(pole_data, base, int x_power, prec, c=1):
 
     cdef int count = 0
     index_list = []
-    for i in range(0, len(pole_data)):
+    for i in range(len(pole_data)):
         if field(pole_data[i][0]) > 0:
             raise NotImplementedError("There exists a pole on the integration contour of the prefactor!")
         if pole_data[i][1] == 1:
@@ -418,7 +422,7 @@ cpdef prefactor_integral(pole_data, base, int x_power, prec, c=1):
     cdef int * is_double = <int*> malloc(sizeof(int) * len(pole_data))
 
     base_c = field(base);
-    for i in range(0, n):
+    for i in range(n):
         r = field(pole_data[i][0])
         mpfr_init2(pole_data_to_c[i], prec)
         mpfr_set(pole_data_to_c[i], <mpfr_t>(<RealNumber>r).value, MPFR_RNDN)
@@ -428,7 +432,7 @@ cpdef prefactor_integral(pole_data, base, int x_power, prec, c=1):
             is_double[i] = 0
     decompose_coeffs = fast_partial_fraction_c(pole_data_to_c, is_double, n, prec)
 
-    for i in range(0, len(pole_data)):
+    for i in range(len(pole_data)):
         mpfr_clear(pole_data_to_c[i])
 
     free(pole_data_to_c)
@@ -439,7 +443,7 @@ cpdef prefactor_integral(pole_data, base, int x_power, prec, c=1):
     cdef mpfr_t temp2
     mpfr_init2(temp2, prec);
     result = np.ndarray(x_power + 1, dtype='O')
-    for i in range(0, x_power + 1):
+    for i in range(x_power + 1):
         result[i] = <RealNumber>(<RealField_class>field)._new()
         mpfr_init2(<mpfr_t>(<RealNumber> result[i]).value, prec)
         mpfr_set_zero(<mpfr_t>(<RealNumber> result[i]).value, 1)
@@ -447,16 +451,16 @@ cpdef prefactor_integral(pole_data, base, int x_power, prec, c=1):
 
     cdef mpfr_t* temp_mpfrs
 
-    for i in range(0, number_of_factors):
+    for i in range(number_of_factors):
         temp_mpfrs = pole_integral_c(x_power, base, pole_data[index_list[i][0]][0], index_list[i][1], prec)
 
-        for j in range(0, x_power + 1):
+        for j in range(x_power + 1):
             mpfr_mul(temp1, decompose_coeffs[i], temp_mpfrs[j], MPFR_RNDN)
             mpfr_add(<mpfr_t>(<RealNumber> result[j]).value, <mpfr_t>(<RealNumber> result[j]).value, temp1, MPFR_RNDN)
             mpfr_clear(temp_mpfrs[j])
         free(temp_mpfrs)
 
-    for i in range(0, number_of_factors):
+    for i in range(number_of_factors):
         mpfr_clear(decompose_coeffs[i])
     free(decompose_coeffs)
     return RealField(prec)(c) * result
@@ -475,27 +479,27 @@ cpdef anti_band_cholesky_inverse(v, n_order_max, prec):
         raise TypeError
 
     cdef mpfr_t* anti_band_input = <mpfr_t*> malloc(sizeof(mpfr_t) * len(v))
-    for i in range(0, len(v)):
+    for i in range(len(v)):
         r = field(v[i])
         mpfr_init2(anti_band_input[i], prec)
         mpfr_set(anti_band_input[i], <mpfr_t>(<RealNumber>r).value, MPFR_RNDN)
     cdef mpfr_t* anti_band_mat = form_anti_band(anti_band_input, <int>(n_max + 1), int(prec))
-    for i in range(0, len(v)):
+    for i in range(len(v)):
         mpfr_clear(anti_band_input[i])
     free(anti_band_input)
     cdef mpfr_t* cholesky_decomposed = mpfr_cholesky(anti_band_mat, <int>(n_max + 1), int(prec))
-    for i in range(0, (n_max - 1) ** 2):
+    for i in range((n_max - 1) ** 2):
         mpfr_clear(anti_band_mat[i])
     free (anti_band_mat)
 
     cdef mpfr_t* inversed = mpfr_triangular_inverse(cholesky_decomposed, <int>(n_max + 1), int(prec))
-    for i in range(0, (n_max + 1) ** 2):
+    for i in range((n_max + 1) ** 2):
         mpfr_clear(cholesky_decomposed[i])
     free(cholesky_decomposed)
 
     result = np.ndarray([n_max + 1, n_max + 1], dtype='O')
-    for i in range(0, n_max + 1):
-        for j in range(0, n_max + 1):
+    for i in range(n_max + 1):
+        for j in range(n_max + 1):
             result[i][j] = <RealNumber>(<RealField_class>field)._new()
             mpfr_init2(<mpfr_t>(<RealNumber>result[i][j]).value, prec)
             mpfr_set(<mpfr_t>(<RealNumber>result[i][j]).value, inversed[i * (n_max + 1) + j], MPFR_RNDN)
@@ -556,14 +560,18 @@ def efm_from_sdpb_output(file_path, normalizing_vector, context):
 
 
 def write_real_num(file_stream, real_num, tag):
+    # type: (io.TextIOWrapper, str, Union[RealNumber, int])
     file_stream.write(("<" + tag + ">"))
     file_stream.write(repr(real_num))
     file_stream.write(("</" + tag + ">\n"))
 
 
 def write_vector(file_stream, name, vector):
+    # type: (io.TextIOWrapper, str, Iterable[Union[RealNumber, int]])
+    # write iterable object vector with tag name to file_stream.
     file_stream.write("<" + name + ">\n")
-    map(lambda x: write_real_num(file_stream, x, "elt"), vector)
+    for x in vector:
+        write_real_num(file_stream, x, "elt")
     file_stream.write("</" + name + ">\n")
 
 
@@ -575,19 +583,21 @@ def write_polynomial(file_stream, polynomial):
         __temp = [polynomial]
     if __temp == []:
         __temp = [0]
-    map(lambda x: write_real_num(file_stream, x, "coeff"), __temp)
+    for x in __temp:
+        write_real_num(file_stream, x, "coeff")
     file_stream.write("</polynomial>\n")
 
 
 def write_polynomial_vector(file_stream, polynomialVector):
     file_stream.write("<polynomialVector>\n")
-    map(lambda x: write_polynomial(file_stream, x), polynomialVector)
+    for x in polynomialVector:
+        write_polynomial(file_stream, x)
     file_stream.write("</polynomialVector>\n")
 
 
 def laguerre_sample_points(n, field, rho):
-    return map(lambda k: (field(3.141592)) ** 2 * (-1 + 4 * k)
-               ** 2 / (-64 * n * (4 * rho).log()), range(0, n))
+    return [(field(3.141592)) ** 2 * (-1 + 4 * k)
+            ** 2 / (-64 * n * (4 * rho).log()) for k in range(n)]
 
 
 def format_poleinfo(poles, context=None):
@@ -747,7 +757,7 @@ cdef class positive_matrix_with_prefactor:
         self.context = context
 
     def __init__(self, damped_rational prefactor, matrix, context):
-        self.matrix = (matrix)
+        self.matrix = matrix
 
     def shift(self, x):
         return positive_matrix_with_prefactor(self.prefactor.shift(x), self.context.polynomial_vector_shift(self.matrix, x), self.context)
@@ -785,9 +795,9 @@ cdef class positive_matrix_with_prefactor:
             file_stream.write("</polynomialVectorMatrix>\n")
 
     def reshape(self, shape=None):
-        if len(self.matrix.shape) == 3 and self.matrix.shape[0] == self.matrix.shape[1] and not shape:
+        if len(self.matrix.shape) == 3 and self.matrix.shape[0] == self.matrix.shape[1] and shape is None:
             return self
-        if not shape:
+        if shape is None:
             shape = (1, 1, self.matrix.shape[-1])
         new_b = self.matrix.reshape(shape)
         return prefactor_numerator(self.prefactor, new_b, self.context)
@@ -902,7 +912,7 @@ def functional_to_spectra(ef_path, problem, context, label=None):
     alpha = efm_from_sdpb_output(ef_path, norm, context)
     polys = [Matrix(x.matrix.dot(alpha)).det() for x in pvm]
     if label is None:
-        label = range(0, len(polys))
+        label = range(len(polys))
     efmread = map(lambda x: find_local_minima(x[0], x[1]), zip(polys, label))
     return efmread
 
@@ -924,13 +934,12 @@ class SDP:
         self.context = context
 
     def write(self, file_path):
-        file_stream = open(file_path, 'w')
-        file_stream.write("<sdp>\n")
-        write_vector(file_stream, "objective", normalizing_component_subtract(
-            self.objective, self.normalization))
-        file_stream.write("<polynomialVectorMatrices>\n")
-        for x in self.pvm:
-            x.write(file_stream, self.normalization)
-        file_stream.write("</polynomialVectorMatrices>\n")
-        file_stream.write("</sdp>\n")
-        file_stream.close()
+        with open(file_path, 'w') as file_stream:
+            file_stream.write("<sdp>\n")
+            write_vector(file_stream, "objective", normalizing_component_subtract(
+                self.objective, self.normalization))
+            file_stream.write("<polynomialVectorMatrices>\n")
+            for x in self.pvm:
+                x.write(file_stream, self.normalization)
+            file_stream.write("</polynomialVectorMatrices>\n")
+            file_stream.write("</sdp>\n")

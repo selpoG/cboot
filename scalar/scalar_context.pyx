@@ -2,7 +2,7 @@ import numpy as np
 from libcpp cimport bool
 from sage.cboot.context_object cimport *
 from sage.cboot.scalar.scalar_context cimport *
-from sage.cboot.context_object import SDP
+from sage.cboot.context_object import SDP, get_dimG
 from sage.all import matrix, ZZ, Integer, cached_method
 from cysignals.signals cimport sig_on, sig_off
 from functools import reduce
@@ -81,7 +81,7 @@ class k_rational_approx_data:
                 for i in range(1, dim_approx_base // 2 + 2)
             ] + [
                 (x.polePosition()) ** i
-                for i in range(0, (dim_approx_base + 1) // 2 - 1)
+                for i in range((dim_approx_base + 1) // 2 - 1)
             ]
             self.approx_matrix = matrix(map(self.approx_column, self.poles))
             if is_correlator_multiple:
@@ -177,7 +177,7 @@ class g_rational_approx_data_two_d:
         right_contribution = [x((self.context.Delta - self.ell) / 2)
                               for x in __chiral_block]
         __zz_res = []
-        for i in range(0, self.context.Lambda + 1):
+        for i in range(self.context.Lambda + 1):
             for j in range(i, self.context.Lambda - i + 1):
                 __zz_res.append(
                     (left_contribution[i] *
@@ -213,7 +213,7 @@ cdef class scalar_cb_context_generic(cb_universal_context):
         array = hBlock_times_rho_n(k, <mpfr_t>(<RealNumber>self.epsilon).value, <mpfr_t>(<RealNumber>ell_c).value, <mpfr_t>(<RealNumber>Delta_c).value, <mpfr_t>(<RealNumber>S_c).value, <mpfr_t>(<RealNumber>P_c).value, <cb_context>self.c_context)
         sig_off()
         res = np.ndarray(self.Lambda + 1, dtype='O')
-        for i in range(0, self.Lambda + 1):
+        for i in range(self.Lambda + 1):
             res[i] = <RealNumber>(<RealField_class>self.field)._new()
             (<RealNumber>res[i])._parent = self.field
             mpfr_init2(<mpfr_t>(<RealNumber>res[i]).value, self.precision)
@@ -227,7 +227,7 @@ cdef class scalar_cb_context_generic(cb_universal_context):
         cdef mpfr_t* _array
         _array = h_asymptotic(<mpfr_t>(<RealNumber>self.epsilon).value,  <mpfr_t>(<RealNumber>S_c).value, <cb_context>(self.c_context))
         res = np.ndarray(self.Lambda + 1, dtype='O')
-        for i in range(0, self.Lambda + 1):
+        for i in range(self.Lambda + 1):
             res[i] = <RealNumber>(<RealField_class>self.field)._new()
 
             (<RealNumber>res[i])._parent = self.field
@@ -258,12 +258,9 @@ cdef class scalar_cb_context_generic(cb_universal_context):
         array = gBlock_full(<mpfr_t>(<RealNumber>self.epsilon).value, <mpfr_t>(<RealNumber>ell_c).value, <mpfr_t>(<RealNumber>Delta_c).value, <mpfr_t>(<RealNumber>S_c).value, <mpfr_t>(<RealNumber>P_c).value, <cb_context>self.c_context)
         sig_off()
 
-        if self.Lambda % 2 != 0:
-            dimGBlock = ((self.Lambda + 1) * (self.Lambda + 3) // 4)
-        else:
-            dimGBlock = ((self.Lambda + 2) ** 2) // 4
-        res = np.ndarray(dimGBlock, dtype='O')
-        for i in range(0, dimGBlock):
+        dimG = get_dimG(self.Lambda)
+        res = np.ndarray(dimG, dtype='O')
+        for i in range(dimG):
             res[i] = <RealNumber>(<RealField_class>self.field)._new()
             (<RealNumber>res[i])._parent = self.field
             mpfr_init2(<mpfr_t>(<RealNumber>res[i]).value, self.precision)
@@ -282,14 +279,10 @@ cdef class scalar_cb_context_generic(cb_universal_context):
         """
         local_c2 = (ell * (ell + 2 * self.epsilon) + Delta * (Delta - 2 - 2 * self.epsilon))
         aligned_index = lambda y_del, x_del: (self.Lambda + 2 - y_del) * y_del + x_del
-        if self.Lambda % 2 != 0:
-            local_dim_answer = (self.Lambda + 1) * (self.Lambda + 3) // 4
-        else:
-            local_dim_answer = (self.Lambda + 2) * (self.Lambda + 2) // 4
-        ans = np.ndarray(local_dim_answer, dtype='O')
+        ans = np.ndarray(get_dimG(self.Lambda), dtype='O')
         ans[0:(self.Lambda + 1)] = array_real
         for i in range(1, (self.Lambda // 2) + 1):
-            for j in range(0, self.Lambda - 2 * i + 1):
+            for j in range(self.Lambda - 2 * i + 1):
                 val = (0)
                 common_factor = self.field(2 * self.epsilon + 2 * i - 1)
                 if j >= 3:
@@ -477,7 +470,7 @@ class rational_approx_data_generic_dim:
                 for i in range(1, dim_approx_base // 2 + 2)
             ] + [
                 (x.polePosition()) ** i
-                for i in range(0, (dim_approx_base + 1) // 2 - 1)
+                for i in range((dim_approx_base + 1) // 2 - 1)
             ]
             self.approx_matrix = matrix(map(self.approx_column, self.poles))
             if is_correlator_multiple:
@@ -567,20 +560,12 @@ def context_for_scalar(epsilon=0.5, Lambda=15, Prec=800, nMax=250):
 
 
 def zzbar_anti_symm_to_xy_matrix(Lambda, field=RealField(400)):
+    if not isinstance(field, RealField_class):
+        raise TypeError("field must be instance of RealField_class, but it is {0}.".format(type(field)))
     q = ZZ['x']
-
-    if Lambda % 2 != 0:
-        dimG = (Lambda + 1) * (Lambda + 3) // 4
-    else:
-        dimG = ((Lambda + 2) ** 2) // 4
-    if Lambda % 2 != 0:
-        dimG = (Lambda + 1) * (Lambda + 3) // 4
-    else:
-        dimG = ((Lambda + 2) ** 2) // 4
-    result = np.ndarray(dimG ** 2, dtype='O')
-    result[:] = field(0)
-    result = result.reshape(dimG, dimG)
-    for i in range(0, Lambda // 2 + 2):
+    dimG = get_dimG(Lambda)
+    result = np.full((dimG, dimG), field(0))
+    for i in range(Lambda // 2 + 2):
         for j in range(i + 1, Lambda + 2 - i):
             coeff = ((q('x + 1') ** j) * (q('x - 1') ** i) - (q('x - 1') ** j)
                      * (q('x + 1') ** i)).padded_list()
@@ -597,12 +582,13 @@ cdef class scalar_cb_2d_context(scalar_cb_context_generic):
     def __init__(self, int Lambda, mpfr_prec_t Prec, long nMax):
         scalar_cb_context_generic.__init__(self, Lambda, Prec, nMax, 0)
         k_context = cb_universal_context(Lambda, Prec, nMax)
+
     def chiral_h_asymptotic(self, S):
         S_c = self.field(S)
         cdef mpfr_t* _array
         _array = chiral_h_asymptotic_c(<mpfr_t>(<RealNumber>S_c).value, <cb_context>(self.c_context))
         res = np.ndarray(self.Lambda + 1, dtype='O')
-        for i in range(0, self.Lambda + 1):
+        for i in range(self.Lambda + 1):
             res[i] = <RealNumber>(<RealField_class>self.field)._new()
             (<RealNumber>res[i])._parent = self.field
             mpfr_init2(<mpfr_t>(<RealNumber>res[i]).value, <mpfr_prec_t>self.precision)
@@ -619,13 +605,14 @@ cdef class scalar_cb_2d_context(scalar_cb_context_generic):
         _array = chiral_h_times_rho_to_n_c(<unsigned long>n, <mpfr_t>(<RealNumber>h_c).value, <mpfr_t>(<RealNumber>S_c).value, <mpfr_t>(<RealNumber>P_c).value, <cb_context>(self.c_context))
         sig_off()
         res = np.ndarray(self.Lambda + 1, dtype='O')
-        for i in range(0, self.Lambda + 1):
+        for i in range(self.Lambda + 1):
             res[i] = <RealNumber>(<RealField_class>self.field)._new()
             (<RealNumber>res[i])._parent = self.field
             mpfr_init2(<mpfr_t>(<RealNumber>res[i]).value, <mpfr_prec_t>self.precision)
             mpfr_set(<mpfr_t>(<RealNumber>res[i]).value, _array[i],  MPFR_RNDN)
             mpfr_clear(_array[i])
         return np.array(res)
+
     cpdef k_table(self, h, Delta_1_2, Delta_3_4):
         S_c = self.field(-Delta_1_2 + Delta_3_4) / 2
         P_c = self.field(-Delta_1_2 * Delta_3_4) / 2
@@ -633,7 +620,7 @@ cdef class scalar_cb_2d_context(scalar_cb_context_generic):
         cdef mpfr_t* _array
         _array = k_table_c(<mpfr_t>(<RealNumber>h_c).value, <mpfr_t>(<RealNumber>S_c).value, <mpfr_t>(<RealNumber>P_c).value, <cb_context>(self.c_context))
         res = np.ndarray(self.Lambda + 1, dtype='O')
-        for i in range(0, self.Lambda + 1):
+        for i in range(self.Lambda + 1):
             res[i] = <RealNumber>(<RealField_class>self.field)._new()
             (<RealNumber>res[i])._parent = self.field
             mpfr_init2(<mpfr_t>(<RealNumber>res[i]).value, <mpfr_prec_t>self.precision)
@@ -651,6 +638,7 @@ cdef class scalar_cb_2d_context(scalar_cb_context_generic):
 cdef class scalar_cb_4d_context(scalar_cb_context_generic):
     cdef public scalar_cb_2d_context k_context
     cdef public object zzbar_anti_symm_to_xy_matrix
+
     def __init__(self, int Lambda, mpfr_prec_t Prec, long nMax):
         scalar_cb_context_generic.__init__(self, Lambda, Prec, nMax, 1)
         self.k_context = scalar_cb_2d_context(Lambda + 1, Prec, nMax)
@@ -719,7 +707,7 @@ class g_rational_approx_data_four_d:
         right_contribution = [x((self.context.Delta - self.ell - 2) / 2)
                               for x in __chiral_block_with_z]
         __zz_res = []
-        for i in range(0, self.context.Lambda // 2 + 2):
+        for i in range(self.context.Lambda // 2 + 2):
             for j in range(i + 1, self.context.Lambda - i + 2):
                 __zz_res.append(
                     (-left_contribution[i] * right_contribution[j]

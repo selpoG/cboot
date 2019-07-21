@@ -1,0 +1,7 @@
+.vscode/*
+.editorconfig
+
+__pycache__/
+*.py[cod]
+.python-version
+.mypy_cache/

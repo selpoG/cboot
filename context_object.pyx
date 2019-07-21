@@ -63,7 +63,8 @@ cdef class cb_universal_context:
     the change variables, e.g. {z, z_bar} -> (x, y) and r -> x.
     """
 
-    def __cinit__(self, int Lambda, mpfr_prec_t Prec, long nMax, float epsilon):
+    def __cinit__(self, int Lambda, mpfr_prec_t Prec, long nMax, float epsilon=0.0):
+        # argument epsilon is not used, but it is needed (why?)
         self.c_context = <cb_context>context_construct(nMax, Prec, Lambda)
         self.precision = <mpfr_prec_t>Prec
         self.field = <RealField_class>RealField(Prec)

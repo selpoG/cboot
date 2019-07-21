@@ -567,17 +567,14 @@ def zzbar_anti_symm_to_xy_matrix(Lambda, field=RealField(400)):
     result = np.full((dimG, dimG), field(0))
     for i in range(Lambda // 2 + 2):
         for j in range(i + 1, Lambda + 2 - i):
-            temp = ((q('x + 1') ** j) * (q('x - 1') ** i) - (q('x - 1') ** j)
-                    * (q('x + 1') ** i)).padded_list()
+            coeff = ((q('x + 1') ** j) * (q('x - 1') ** i) - (q('x - 1') ** j)
+                     * (q('x + 1') ** i)).padded_list()
             column_position = (Lambda + 2 - i) * i + (j - i - 1)
             parity = (i + j + 1) % 2
-            xypositions = ([(Lambda + 2 - (i + j - x - 1) // 2) * (i + j - x - 1) //
-                            2 + x for x in range(parity, len(temp), 2)])
-            coeff_with_position = zip(xypositions, temp[parity::2])
-
-            for x in coeff_with_position:
-                result[int(x[0])] = field(x[1] / 2)
-
+            xypositions = [(Lambda + 2 - (i + j - x - 1) // 2) * (i + j - x - 1) //
+                           2 + x for x in range(parity, len(coeff), 2)]
+            for p, c in zip(xypositions, coeff[parity::2]):
+                result[column_position][int(p)] = field(c / 2)
     return result.transpose()
 
 

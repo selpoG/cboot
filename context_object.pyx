@@ -36,8 +36,7 @@ def z_zbar_derivative_to_x_y_derivative_Matrix(Lambda, field=RealField(400)):
     Assuming the derivatives to be ordered as
     f, D_z f, D_z
     """
-    if not isinstance(field, RealField_class):
-        raise TypeError("field must be instance of RealField_class, but it is {0}.".format(type(field)))
+    assert isinstance(field, RealField_class), "field must be instance of RealField_class, but is {0}.".format(type(field))
     q = field['x']
     dimG = get_dimG(Lambda)
     result = np.full((dimG, dimG), field(0))
@@ -46,13 +45,13 @@ def z_zbar_derivative_to_x_y_derivative_Matrix(Lambda, field=RealField(400)):
     for i in range(Lambda // 2 + 1):
         for j in range(i, Lambda + 1 - i):
             if i == j:
-                temp = ((q('x + 1') ** i) * (q('x - 1') ** i)).padded_list()
+                coeff = ((q('x + 1') ** i) * (q('x - 1') ** i)).padded_list()
             else:
-                temp = ((q('x + 1') ** j) * (q('x - 1') ** i) +
-                        (q('x - 1') ** j) * (q('x + 1') ** i)).padded_list()
+                coeff = ((q('x + 1') ** j) * (q('x - 1') ** i) +
+                         (q('x - 1') ** j) * (q('x + 1') ** i)).padded_list()
             parity = (i + j) % 2
-            for x, y in zip(temp[parity::2], range(parity, len(temp), 2)):
-                set_ij_elements(x, (i + j - y) // 2, y, i, j - i)
+            for c, p in zip(coeff[parity::2], range(parity, len(coeff), 2)):
+                set_ij_elements(c, (i + j - p) // 2, p, i, j - i)
     return result
 
 
@@ -68,8 +67,8 @@ cdef class cb_universal_context:
         self.c_context = <cb_context>context_construct(nMax, Prec, Lambda)
         self.precision = <mpfr_prec_t>Prec
         self.field = <RealField_class>RealField(Prec)
-        self.Delta_Field = self.field['Delta'] # type: sage.rings.polynomial.polynomial_ring.PolynomialRing_field_with_category
-        self.Delta = self.Delta_Field('Delta') # type: sage.rings.polynomial.polynomial_real_mpfr_dense.PolynomialRealDense
+        self.Delta_Field = self.field['Delta']  # type: sage.rings.polynomial.polynomial_ring.PolynomialRing_field_with_category
+        self.Delta = self.Delta_Field('Delta')  # type: sage.rings.polynomial.polynomial_real_mpfr_dense.PolynomialRealDense
         self.Lambda = Lambda
         self.maxExpansionOrder = nMax
         self.rho_to_z_matrix = np.ndarray((Lambda + 1, Lambda + 1), dtype='O')
@@ -101,6 +100,7 @@ cdef class cb_universal_context:
         self.null_ftype = np.full(self.dim_f(), self.field(0))
         self.null_htype = np.full(self.dim_h(), self.field(0))
 
+    # dim_f + dim_h = dim_G
     def dim_f(self):
         return int(((self.Lambda + 1) // 2) * (((self.Lambda + 1) // 2) + 1) // 2)
 
@@ -125,7 +125,7 @@ cdef class cb_universal_context:
         res[0] = self.field(1)
         return res
 
-    def v_to_d(self, d):
+    def __v_to_d(self, d):
         """
         compute the table of derivative of v = (z z_bar) ^ d
         in the x_y basis
@@ -149,7 +149,7 @@ cdef class cb_universal_context:
         F_minus = F_minus_matrix(d).dot(gBlock(ell, Delta, S, P))
         """
         aligned_index = lambda x: (self.Lambda + 2 - x[0]) * x[0] + x[1]
-        local_v = self.v_to_d(d)
+        local_v = self.__v_to_d(d)
         return ((self.field(1) / 4) ** d) * np.array(map(lambda i: (np.array(map(lambda m: local_v[aligned_index(i - m)] if ((i - m)[0] >= 0 and (i - m)[1] >= 0) else d.parent(0), self.index_list)))
             , [x for x in self.index_list if x[1] % 2 != 0]))
 
@@ -162,7 +162,7 @@ cdef class cb_universal_context:
         F_plus = F_plus_matrix(d).dot(gBlock(ell, Delta, S, P))
         """
         aligned_index = lambda x: (self.Lambda + 2 - x[0]) * x[0] + x[1]
-        local_v = self.v_to_d(d)
+        local_v = self.__v_to_d(d)
         return ((self.field(1) / 4) ** d) * np.array(map(lambda i: (np.array(map(lambda m: local_v[aligned_index(i - m)] if ((i - m)[0] >= 0 and (i - m)[1] >= 0) else d.parent(0), self.index_list)))
             , [x for x in self.index_list if x[1] % 2 == 0]))
 
@@ -197,8 +197,6 @@ cdef class cb_universal_context:
         Convert a constant (i.e., non-polynomial) vector into positive_matrix_with_prefactor.
         """
         pref = self.damped_rational([], 1)
-        if len(vector.shape) == 1:
-            return self.prefactor_numerator(pref, vector.reshape(1, 1, len(vector)))
         return self.prefactor_numerator(pref, vector)
 
     def lcms(self, preflist):
@@ -233,86 +231,77 @@ cdef class cb_universal_context:
         bodies = dict()
         nrow = None
         for n, mat in enumerate(l):
-            if not nrow:
+            if nrow is None:
                 nrow = len(mat)
-            else:
-                if nrow != len(mat):
-                    raise RuntimeError("unequal dim")
+            elif nrow != len(mat):
+                raise RuntimeError("unequal dim")
             for i, row in enumerate(mat):
                 if nrow != len(row):
                     raise RuntimeError("unequal dim")
                 for j, x in enumerate(row):
                     if isinstance(x, prefactor_numerator):
-                        len_x = x.matrix.shape[-1]
+                        len_x = x.matrix.shape[0]
                         pns.append(x)
                         pnindices.append((n, i, j))
                     else:
                         len_x = int(x)
-                        v = np.ndarray(len_x, dtype='O')
-                        v[:] = self(0)
-                        bodies[(n, i, j)] = v
+                        bodies[(n, i, j)] = np.full(len_x, self(0), dtype='O')
                     if n not in dims:
                         dims[n] = len_x
                     elif dims[n] != len_x:
                         raise RuntimeError("Input has inconsistent dimensions.")
-
         res_pref, pref_rems = self.lcms([pn.prefactor for pn in pns])
-        vecs = [(ind, __mult_poles(rem, pn.prefactor.pref_constant * pn.matrix, self))
-                for ind, pn, rem in zip(pnindices, pns, pref_rems)]
-        bodies.update(dict(vecs))
-        res = np.ndarray((nrow, nrow, sum([dims[x] for x in dims])), dtype='O')
+        for ind, pn, rem in zip(pnindices, pns, pref_rems):
+            bodies[ind] = __mult_poles(rem, pn.prefactor.pref_constant * pn.matrix, self)
+        res = np.ndarray((nrow, nrow, sum(dims[x] for x in dims)), dtype='O')
         for i in range(nrow):
             for j in range(nrow):
-                v = (bodies[(n, i, j)].reshape((dims[n], )) for n in range(nBlock))
-                vv = np.concatenate(tuple(v))
+                v = tuple(bodies[(n, i, j)].reshape((dims[n], )) for n in range(nBlock))
+                vv = np.concatenate(v)
                 res[i, j] = vv
         return prefactor_numerator(res_pref, res, self)
 
     def sumrule_to_SDP(self, normalization, objective, svs):
+        # svs must be a list of lists of matrices
+        # a matrix is one component, or a list of lists of component (which must be a square matrix)
+        # svs[m][n][i][j]: m-th block, n-th equation, i-th row, j-th column
         n_block = len(svs[0])
-        dims = dict()
-        shapes = []
-        res = []
-        tbs = dict([(n, []) for n in range(n_block)])
+        dims = dict()  # type: Dict[int, int]
+        res = []  # type: List[List[List[List[prefactor_numerator]]]]
+        tbs = {n: [] for n in range(n_block)}
         for m, sv in enumerate(svs):
             if len(sv) != n_block:
                 raise RuntimeError("Sum rule vector has in equal dimensions!")
-            psv = []
+            psv = []  # type: List[List[List[prefactor_numerator]]]
             for n, component in enumerate(sv):
+                # pcomponent: List[List[prefactor_numerator]]
                 if not isinstance(component, list):
                     pcomponent = [[component]]
                 else:
                     pcomponent = component
+                assert len(pcomponent) == len(pcomponent[0]), "Each component must be a square matrix."
                 for i, row in enumerate(pcomponent):
                     for j, x in enumerate(row):
                         if isinstance(x, prefactor_numerator):
-                            try:
-                                givendim = dims[n]
-                                if givendim != x.matrix.shape[-1]:
-                                    raise RuntimeError("Found inconsistent dimension.")
-                            except KeyError:
-                                dims[n] = x.matrix.shape[-1]
+                            if n not in dims:
+                                dims[n] = x.matrix.shape[0]
+                            elif dims[n] != x.matrix.shape[0]:
+                                raise RuntimeError("Found inconsistent dimension.")
                         elif isinstance(x, np.ndarray):
                             pcomponent[i][j] = self.vector_to_prefactor_numerator(x)
-                            try:
-                                givendim = dims[n]
-                                if givendim != x.shape[-1]:
-                                    raise RuntimeError("Found inconsistent dimension.")
-                            except KeyError:
-                                dims[n] = x.shape[-1]
+                            if n not in dims:
+                                dims[n] = x.shape[0]
+                            elif dims[n] != x.shape[0]:
+                                raise RuntimeError("Found inconsistent dimension.")
                         else:
-                            x = int(x)
                             tbs[n].append((m, n, i, j))
                 psv.append(pcomponent)
             res.append(psv)
         if n_block > len(dims):
             raise RuntimeError("There exists a component zero for all")
         for k in dims:
-            try:
-                mlist = tbs[k]
-            except KeyError:
-                mlist = []
-            for m, n, i, j in mlist:
+            if k not in tbs: continue
+            for m, n, i, j in tbs[k]:
                 res[m][n][i][j] = dims[k]
         if isinstance(normalization, np.ndarray):
             norm = normalization
@@ -320,32 +309,30 @@ cdef class cb_universal_context:
             norm_list = []
             for n, v in enumerate(normalization):
                 if isinstance(v, np.ndarray):
+                    if dims[n] != v.shape[0]:
+                        raise RuntimeError("Found inconsistent dimension.")
                     norm_list.append(v)
                 elif v == 0:
-                    tba = np.ndarray((dims[n], ), dtype='O')
-                    tba[:] = self(0)
-                    norm_list.append(tba)
+                    norm_list.append(np.full(dims[n], self(0), dtype='O'))
             norm = np.concatenate(norm_list)
         else:
             raise NotImplementedError
-
         if isinstance(objective, np.ndarray):
             obj = objective
         elif isinstance(objective, list):
             obj_list = []
             for n, v in enumerate(objective):
                 if isinstance(v, np.ndarray):
+                    if dims[n] != v.shape[0]:
+                        raise RuntimeError("Found inconsistent dimension.")
                     obj_list.append(v)
                 elif v == 0:
-                    tba = np.ndarray((dims[n], ), dtype='O')
-                    tba[:] = self(0)
-                    obj_list.append(tba)
+                    obj_list.append(np.full(dims[n], self(0), dtype='O'))
             obj = np.concatenate(obj_list)
         else:
             try:
                 if int(objective) == 0:
-                    obj = np.ndarray((sum([dims[n] for n in dims]), ), dtype='O')
-                    obj[:] = self(0)
+                    obj = np.full(sum(dims[n] for n in dims), self(0), dtype='O')
                 else:
                     raise NotImplementedError("Got unrecognizable input for objective")
             except TypeError:
@@ -359,8 +346,7 @@ cdef class cb_universal_context:
             if isinstance(y, prefactor_numerator):
                 pref = x.prefactor * y.prefactor
                 return prefactor_numerator(pref, np.dot(x.matrix, y.matrix), self)
-            else:
-                return prefactor_numerator(x.prefactor, np.dot(x.matrix, y), self)
+            return prefactor_numerator(x.prefactor, np.dot(x.matrix, y), self)
         else:
             if isinstance(y, prefactor_numerator):
                 return prefactor_numerator(y.prefactor, np.dot(x, y.matrix), self)
@@ -371,7 +357,7 @@ cdef mpfr_t* pole_integral_c(x_power_max, base, pole_position, order_of_pole, mp
     a = RealField(2 * prec)(pole_position)
     b = RealField(2 * prec)(base)
     if a < 0:
-        incomplete_gamma = b ** a * gamma(0, a * (b.log()))
+        incomplete_gamma = b ** a * gamma(0, a * b.log())
     elif a == 0:
         incomplete_gamma = RealField(prec)(prec)
     else:
@@ -497,7 +483,7 @@ cpdef anti_band_cholesky_inverse(v, n_order_max, prec):
         mpfr_clear(cholesky_decomposed[i])
     free(cholesky_decomposed)
 
-    result = np.ndarray([n_max + 1, n_max + 1], dtype='O')
+    result = np.ndarray((n_max + 1, n_max + 1), dtype='O')
     for i in range(n_max + 1):
         for j in range(n_max + 1):
             result[i][j] = <RealNumber>(<RealField_class>field)._new()
@@ -516,6 +502,8 @@ def max_index(_v):
 
 
 def normalizing_component_subtract(m, normalizing_vector):
+    assert isinstance(normalizing_vector, np.ndarray), "normalizing_vector must be np.ndarray, but is {0}".format(
+        type(normalizing_vector))
     __index = max_index(normalizing_vector)
     __deleted_normalizing_vector = (
         1 / normalizing_vector[__index]) * np.delete(normalizing_vector, __index)

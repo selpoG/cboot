@@ -705,6 +705,9 @@ cdef class damped_rational:
     def __div__(self, y):
         return self.div(y)
 
+    def __truediv__(self, y):
+        return self.div(y)
+
     # this method does not change self
     def add_poles(self, location):
         # type: (Union[Dict[RealNumber, int], List[RealNumber], List[Tuple[RealNumber, int]]]) -> damped_rational
@@ -848,6 +851,9 @@ cdef class prefactor_numerator(positive_matrix_with_prefactor):
         return prefactor_numerator(self.prefactor, -self.matrix, self.context)
 
     def __div__(self, x):
+        return prefactor_numerator(self.prefactor, self.matrix / self.context(x), self.context)
+
+    def __truediv__(self, x):
         return prefactor_numerator(self.prefactor, self.matrix / self.context(x), self.context)
 
     def __add__(self, other):

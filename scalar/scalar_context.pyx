@@ -1,12 +1,15 @@
+from __future__ import print_function, unicode_literals
+from __future__ import division
+from future_builtins import ascii, filter, hex, map, oct, zip
 import numpy as np
 from libcpp cimport bool
 from sage.cboot.context_object cimport *
 from sage.cboot.scalar.scalar_context cimport *
-from sage.cboot.context_object import SDP, get_dimG
+from sage.cboot.context_object import SDP, get_dimG, format_poleinfo
 from sage.all import matrix, ZZ, Integer, cached_method
 from cysignals.signals cimport sig_on, sig_off
+from collections import Counter
 from functools import reduce
-
 
 class k_poleData:
     """
@@ -45,7 +48,7 @@ class k_poleData:
         p1 = self.context.pochhammer(1, self.k)
         p2 = self.context.pochhammer((1 - self.k + 2 * self.a) / 2, self.k)
         p3 = self.context.pochhammer((1 - self.k + 2 * self.b) / 2, self.k)
-        return (-local_sign * (self.k) / (2 * p1 ** 2)) * p2 * p3
+        return (-local_sign * self.k / (2 * p1 ** 2)) * p2 * p3
 
     def residue_of_h(self):
         return self.coeff() * self.context.chiral_h_times_rho_to_n(
@@ -61,8 +64,8 @@ class k_rational_approx_data:
     def __init__(self, context, cutoff, Delta_1_2, Delta_3_4,
                  is_correlator_multiple, approximate_poles):
         self.cutoff = cutoff
-        self.a = -Delta_1_2 / 2
-        self.b = Delta_3_4 / 2
+        self.a = -context.field(Delta_1_2) / 2
+        self.b = context.field(Delta_3_4) / 2
         self.S = self.a + self.b
         self.P = 2 * self.a * self.b
         self.context = context
@@ -93,26 +96,19 @@ class k_rational_approx_data:
                     k_poleData(x, self.a, self.b, context)
                     for x in range(2 * (cutoff // 2) + 2, 2 * cutoff + 2, 2)]
 
+    def get_poles(self):
+        return format_poleinfo(Counter(x.polePosition() for x in self.poles))
+
     def prefactor(self):
-        __q = sorted([x.polePosition() for x in self.poles], reverse=True)
-        __poles = [[__q[0], 1]]
-        __count = 0
-        for i in range(1, len(__q)):
-            if __q[i] == __q[i - 1]:
-                __poles[__count][1] = __poles[__count][1] + 1
-            else:
-                __poles.append([__q[i], 1])
-                __count = __count + 1
-        return damped_rational(__poles, 4 * self.context.rho,
+        return damped_rational(self.get_poles(), 4 * self.context.rho,
                                self.context.field(1), self.context)
 
     def approx_chiral_h(self):
         res = self.context.chiral_h_asymptotic(self.S) * reduce(
             lambda y, w: y * w, [(self.context.Delta - x.polePosition()) for x in self.poles])
-        _polys = [reduce(lambda y, z: y * z, [(self.context.Delta - w.polePosition())
+        _polys = [reduce(lambda y, z: y * z, [self.context.Delta - w.polePosition()
                                              for w in self.poles if w != x]) for x in self.poles]
-        res += reduce(lambda y, w: y + w, map(lambda x,
-                                              y: x.residue_of_h() * y, self.poles, _polys))
+        res += reduce(lambda y, w: y + w, map(lambda x, y: x.residue_of_h() * y, self.poles, _polys))
         if self.approx_poles != []:
             approx_matrix_inv = self.approx_matrix.transpose().inverse()
             approx_target = matrix(
@@ -139,8 +135,8 @@ class g_rational_approx_data_two_d:
                  is_correlator_multiple, approximate_poles=True):
         self.cutoff = cutoff
         self.ell = ell
-        self.a = -Delta_1_2 / 2
-        self.b = Delta_3_4 / 2
+        self.a = -context.field(Delta_1_2) / 2
+        self.b = context.field(Delta_3_4) / 2
         self.S = self.a + self.b
         self.P = 2 * self.a * self.b
         self.context = context
@@ -153,21 +149,12 @@ class g_rational_approx_data_two_d:
             approximate_poles)
 
     def prefactor(self):
-        __chiral_poles = set(self.chiral_approx_data.prefactor().poles)
+        __chiral_poles = set(self.chiral_approx_data.get_poles())
         __q = [2 * x + self.ell for x in __chiral_poles] + \
-            [2 * x - self.ell for x in __chiral_poles]
-        __q = sorted(__q, reverse=True)
-        __poles = [[__q[0], 1]]
-        __count = 0
-        for i in range(1, len(__q)):
-            if __q[i] == __q[i - 1]:
-                __poles[__count][1] = __poles[__count][1] + 1
-            else:
-                __poles.append([__q[i], 1])
-                __count = __count + 1
-        return damped_rational(__poles,
+              [2 * x - self.ell for x in __chiral_poles]
+        return damped_rational(format_poleinfo(Counter(__q)),
                                4 * self.context.rho,
-                               self.context.field(4) ** (len(__chiral_poles)),
+                               self.context.field(4) ** len(__chiral_poles),
                                self.context)
 
     def approx_g(self):
@@ -180,11 +167,8 @@ class g_rational_approx_data_two_d:
         for i in range(self.context.Lambda + 1):
             for j in range(i, self.context.Lambda - i + 1):
                 __zz_res.append(
-                    (left_contribution[i] *
-                     right_contribution[j] +
-                     left_contribution[j] *
-                     right_contribution[i]) /
-                    2)
+                    (left_contribution[i] * right_contribution[j] +
+                     left_contribution[j] *right_contribution[i]) / 2)
         return self.context.zzbar_to_xy_marix.dot(np.array(__zz_res))
 
     def approx(self):
@@ -244,7 +228,7 @@ cdef class scalar_cb_context_generic(cb_universal_context):
 
         ell_c = self.field(ell)
         Delta_c = self.field(Delta)
-        S_c = self.field(-Delta_1_2 + Delta_3_4) / 2
+        S_c = (self.field(-Delta_1_2) + self.field(Delta_3_4)) / 2
         P_c = self.field(-Delta_1_2) * self.field(Delta_3_4) / 2
 
         # In case Delta and ell = 0, return the identity_vector.
@@ -277,13 +261,13 @@ cdef class scalar_cb_context_generic(cb_universal_context):
         from x-derivatives of conformal block called array_real,
         which is a (self.Lambda + 1)-dimensional array.
         """
-        local_c2 = (ell * (ell + 2 * self.epsilon) + Delta * (Delta - 2 - 2 * self.epsilon))
+        local_c2 = ell * (ell + 2 * self.epsilon) + Delta * (Delta - 2 - 2 * self.epsilon)
         aligned_index = lambda y_del, x_del: (self.Lambda + 2 - y_del) * y_del + x_del
         ans = np.ndarray(get_dimG(self.Lambda), dtype='O')
-        ans[0:(self.Lambda + 1)] = array_real
+        ans[0:self.Lambda + 1] = array_real
         for i in range(1, (self.Lambda // 2) + 1):
             for j in range(self.Lambda - 2 * i + 1):
-                val = (0)
+                val = self.field(0)
                 common_factor = self.field(2 * self.epsilon + 2 * i - 1)
                 if j >= 3:
                     val += ans[aligned_index(i, j - 3)] * 16 * common_factor
@@ -291,7 +275,7 @@ cdef class scalar_cb_context_generic(cb_universal_context):
                     val += ans[aligned_index(i, j - 2)] * 8 * common_factor
                 if j >= 1:
                     val += -ans[aligned_index(i, j - 1)] * 4 * common_factor
-                val += (4 * (2 * P + 8 * S * i + 4 * S * j - 8 * S + 2 * local_c2 + 4 * self.epsilon * i + 4 * self.epsilon * j - 4 * self.epsilon + 4 * i ** 2 + 8 * i * j - 2 * i + j ** 2 - 5 * j - 2) / (i)) * ans[aligned_index(i - 1, j)]
+                val += (4 * (2 * P + 8 * S * i + 4 * S * j - 8 * S + 2 * local_c2 + 4 * self.epsilon * i + 4 * self.epsilon * j - 4 * self.epsilon + 4 * i ** 2 + 8 * i * j - 2 * i + j ** 2 - 5 * j - 2) / i) * ans[aligned_index(i - 1, j)]
                 val += (-self.field((j + 1) * (j + 2)) / i) * ans[aligned_index(i - 1, j + 2)]
                 val += (2 * (j + 1) * (2 * S + 2 * self.epsilon - 4 * i - j + 6) / i) * ans[aligned_index(i - 1, j + 1)]
                 if j >= 1:
@@ -430,8 +414,8 @@ class rational_approx_data_generic_dim:
         self.epsilon = context.epsilon
         self.ell = ell
         self.cutoff = cutoff
-        self.a = -Delta_1_2 / 2
-        self.b = Delta_3_4 / 2
+        self.a = -context.field(Delta_1_2) / 2
+        self.b = context.field(Delta_3_4) / 2
         self.S = self.a + self.b
         self.P = 2 * self.a * self.b
         self.context = context
@@ -442,7 +426,7 @@ class rational_approx_data_generic_dim:
                 for x in range(1, self.cutoff + 1)
             ] + [
                 poleData(2, x, ell, self.a, self.b, context)
-                for x in range(1, (cutoff // 2) + 1)
+                for x in range(1, cutoff // 2 + 1)
             ] + [
                 poleData(3, x, ell, self.a, self.b, context)
                 for x in range(1, min(ell, cutoff // 2) + 1)
@@ -453,7 +437,7 @@ class rational_approx_data_generic_dim:
                 for x in range(2, 2 * (cutoff // 2) + 2, 2)
             ] + [
                 poleData(2, x, ell, self.a, self.b, context)
-                for x in range(1, (cutoff // 2) + 1)
+                for x in range(1, cutoff // 2 + 1)
             ] + [
                 poleData(3, x, ell, self.a, self.b, context)
                 for x in range(2, 2 * (min(ell, cutoff) // 2) + 2, 2)
@@ -469,7 +453,7 @@ class rational_approx_data_generic_dim:
                 1 / (unitarity_bound - x.polePosition()) ** i
                 for i in range(1, dim_approx_base // 2 + 2)
             ] + [
-                (x.polePosition()) ** i
+                x.polePosition() ** i
                 for i in range((dim_approx_base + 1) // 2 - 1)
             ]
             self.approx_matrix = matrix(map(self.approx_column, self.poles))
@@ -479,7 +463,7 @@ class rational_approx_data_generic_dim:
                     for x in range(cutoff + 1, 2 * cutoff + 1)
                 ] + [
                     poleData(2, x, ell, self.a, self.b, context)
-                    for x in range((cutoff // 2) + 1, 2 * (cutoff // 2) + 1)
+                    for x in range(cutoff // 2 + 1, 2 * (cutoff // 2) + 1)
                 ] + [
                     poleData(3, x, ell, self.a, self.b, context)
                     for x in range(min(ell, cutoff // 2) + 1, ell + 1)
@@ -490,24 +474,16 @@ class rational_approx_data_generic_dim:
                     for x in range(2 * (cutoff // 2) + 2, 2 * cutoff + 2, 2)
                 ] + [
                     poleData(2, x, ell, self.a, self.b, context)
-                    for x in range((cutoff // 2) + 1, 2 * (cutoff // 2) + 1)
+                    for x in range(cutoff // 2 + 1, 2 * (cutoff // 2) + 1)
                 ] + [
                     poleData(3, x, ell, self.a, self.b, context)
                     for x in range(2 * (min(ell, cutoff) // 2) + 2, 2 * (ell // 2) + 2, 2)
                 ]
 
     def prefactor(self):
-        __q = sorted([x.polePosition() for x in self.poles], reverse=True)
-        __poles = [[__q[0], 1]]
-        __count = 0
-        for i in range(1, len(__q)):
-            if __q[i] == __q[i - 1]:
-                __poles[__count][1] = __poles[__count][1] + 1
-            else:
-                __poles.append([__q[i], 1])
-                __count = __count + 1
-        return damped_rational(__poles, 4 * self.context.rho,
-                               self.context.field(1), self.context)
+        return damped_rational(
+            format_poleinfo(Counter(x.polePosition() for x in self.poles)),
+            4 * self.context.rho, self.context.field(1), self.context)
 
     def approx_h(self):
         res = self.context.h_asymptotic_form(self.S) * reduce(
@@ -562,19 +538,21 @@ def context_for_scalar(epsilon=0.5, Lambda=15, Prec=800, nMax=250):
 def zzbar_anti_symm_to_xy_matrix(Lambda, field=RealField(400)):
     if not isinstance(field, RealField_class):
         raise TypeError("field must be instance of RealField_class, but it is {0}.".format(type(field)))
-    q = ZZ['x']
+    q = ZZ[str('x')]
     dimG = get_dimG(Lambda)
     result = np.full((dimG, dimG), field(0))
+    qplus = q(str('x + 1'))
+    qminus = q(str('x - 1'))
     for i in range(Lambda // 2 + 2):
         for j in range(i + 1, Lambda + 2 - i):
-            coeff = ((q('x + 1') ** j) * (q('x - 1') ** i) - (q('x - 1') ** j)
-                     * (q('x + 1') ** i)).padded_list()
+            coeff = ((qplus ** j) * (qminus ** i) -
+                     (qminus ** j) * (qplus ** i)).padded_list()
             column_position = (Lambda + 2 - i) * i + (j - i - 1)
             parity = (i + j + 1) % 2
             xypositions = [(Lambda + 2 - (i + j - x - 1) // 2) * (i + j - x - 1) //
                            2 + x for x in range(parity, len(coeff), 2)]
             for p, c in zip(xypositions, coeff[parity::2]):
-                result[column_position][int(p)] = field(c / 2)
+                result[column_position][int(p)] = field(c) / 2
     return result.transpose()
 
 
@@ -664,8 +642,8 @@ class g_rational_approx_data_four_d:
                  is_correlator_multiple, approximate_poles=True):
         self.cutoff = cutoff
         self.ell = ell
-        self.a = -Delta_1_2 / 2
-        self.b = Delta_3_4 / 2
+        self.a = -context.field(Delta_1_2) / 2
+        self.b = context.field(Delta_3_4) / 2
         self.S = self.a + self.b
         self.P = 2 * self.a * self.b
         self.context = context
@@ -678,23 +656,14 @@ class g_rational_approx_data_four_d:
             approximate_poles)
 
     def prefactor(self):
-        __chiral_poles = set(self.chiral_approx_data.prefactor().poles)
+        __chiral_poles = set(self.chiral_approx_data.get_poles())
         __q = [2 * x - self.ell for x in __chiral_poles] + \
-            [2 * x + self.ell + 2 for x in __chiral_poles]
-        __q = sorted(__q, reverse=True)
-        __poles = [[__q[0], 1]]
-        __count = 0
-        for i in range(1, len(__q)):
-            if __q[i] == __q[i - 1]:
-                __poles[__count][1] = __poles[__count][1] + 1
-            else:
-                __poles.append([__q[i], 1])
-                __count = __count + 1
+              [2 * x + self.ell + 2 for x in __chiral_poles]
         return damped_rational(
-            __poles,
+            format_poleinfo(Counter(__q)),
             4 * self.context.rho,
-            1 / (4 * self.context.rho * self.context.field(self.ell + 1))
-            * self.context.field(4) ** (len(__chiral_poles)),
+            self.context.field(4) ** len(__chiral_poles)
+            / (4 * self.context.rho * self.context.field(self.ell + 1)),
             self.context)
 
     def approx_g(self):

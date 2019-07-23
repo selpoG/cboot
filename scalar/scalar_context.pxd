@@ -6,9 +6,6 @@ cdef extern from "stdlib.h":
     void* malloc(size_t size)
     void free(void* ptr)
 
-# cdef extern from "sage/cb/hor_formula.h":
-#    pass
-
 cdef extern from "hor_recursion.h":
     mpfr_t* h_asymptotic(mpfr_t epsilon, mpfr_t S, cb_context context)
     mpfr_t* real_axis_result(mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S, mpfr_t P, cb_context context)

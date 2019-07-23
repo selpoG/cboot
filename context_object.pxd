@@ -23,11 +23,7 @@ cdef extern from "sage/cboot/context_variables.h":
         mpfr_t* rho_to_z_matrix
     cb_context context_construct(long nMax, mpfr_prec_t prec, int Lambda)
     void clear_cb_context(cb_context context)
-#
-# cdef class clevel_context:
-#    cdef cb_context context
-#    cdef public np.ndarray zrmat
-#
+
 cdef class cb_universal_context:
     cdef cb_context c_context
     cdef public mpfr_prec_t precision
@@ -49,10 +45,10 @@ cdef class cb_universal_context:
     cdef public object null_htype
 
 cdef class damped_rational:
-    cdef public object poles
-    cdef public RealNumber base
-    cdef public RealNumber pref_constant
-    cdef public cb_universal_context context
+    cdef public object __poles
+    cdef public RealNumber __base
+    cdef public RealNumber __pref_constant
+    cdef public cb_universal_context __context
 
 cdef class positive_matrix_with_prefactor:
     cdef public damped_rational prefactor

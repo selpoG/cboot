@@ -1,22 +1,19 @@
+from __future__ import print_function, unicode_literals
+from __future__ import division
+from future_builtins import ascii, filter, hex, map, oct, zip
 from libcpp cimport bool
 from sage.libs.mpfr cimport *
 from sage.rings.real_mpfr cimport *
 import numpy as np
 
-from sage.all import Matrix, is_square, sqrt
+from sage.all import Matrix, is_square, sqrt, log
 cimport numpy as np
 from sage.functions.gamma import gamma
 from sage.rings.real_mpfr import RR, RealField_class, RealNumber
 import copy
 import re
+from collections import Counter
 from functools import reduce
-
-
-def __mult_poles(poles, pref_const, context):
-    return reduce(
-        lambda x, y: x * y,
-        [(context.Delta - z) ** poles[z] for z in poles],
-        pref_const)
 
 
 def get_dimG(Lambda):
@@ -37,18 +34,20 @@ def z_zbar_derivative_to_x_y_derivative_Matrix(Lambda, field=RealField(400)):
     f, D_z f, D_z
     """
     assert isinstance(field, RealField_class), "field must be instance of RealField_class, but is {0}.".format(type(field))
-    q = field['x']
+    q = field[str('x')]
     dimG = get_dimG(Lambda)
     result = np.full((dimG, dimG), field(0))
     def set_ij_elements(x, a, b, i, j):
         result[(Lambda + 2 - a) * a + b][(Lambda + 2 - i) * i + j] = x
+    qplus = q(str('x + 1'))
+    qminus = q(str('x - 1'))
     for i in range(Lambda // 2 + 1):
         for j in range(i, Lambda + 1 - i):
             if i == j:
-                coeff = ((q('x + 1') ** i) * (q('x - 1') ** i)).padded_list()
+                coeff = ((qplus ** i) * (qminus ** i)).padded_list()
             else:
-                coeff = ((q('x + 1') ** j) * (q('x - 1') ** i) +
-                         (q('x - 1') ** j) * (q('x + 1') ** i)).padded_list()
+                coeff = ((qplus ** j) * (qminus ** i) +
+                         (qminus ** j) * (qplus ** i)).padded_list()
             parity = (i + j) % 2
             for c, p in zip(coeff[parity::2], range(parity, len(coeff), 2)):
                 set_ij_elements(c, (i + j - p) // 2, p, i, j - i)
@@ -67,12 +66,12 @@ cdef class cb_universal_context:
         self.c_context = <cb_context>context_construct(nMax, Prec, Lambda)
         self.precision = <mpfr_prec_t>Prec
         self.field = <RealField_class>RealField(Prec)
-        self.Delta_Field = self.field['Delta']  # type: sage.rings.polynomial.polynomial_ring.PolynomialRing_field_with_category
-        self.Delta = self.Delta_Field('Delta')  # type: sage.rings.polynomial.polynomial_real_mpfr_dense.PolynomialRealDense
+        self.Delta_Field = self.field[str('Delta')]  # type: sage.rings.polynomial.polynomial_ring.PolynomialRing_field_with_category
+        self.Delta = self.Delta_Field(str('Delta'))  # type: sage.rings.polynomial.polynomial_real_mpfr_dense.PolynomialRealDense
         self.Lambda = Lambda
         self.maxExpansionOrder = nMax
         self.rho_to_z_matrix = np.ndarray((Lambda + 1, Lambda + 1), dtype='O')
-        self.polynomial_vector_evaluate = np.vectorize(lambda x, value: self.Delta_Field(x)(value))
+        self.polynomial_vector_evaluate = np.vectorize(lambda x, value: self.Delta_Field(x)(value)) # type: Function[[np.ndarray, RealNumber], np.ndarray]
 
         for i in range(Lambda + 1):
             for j in range(Lambda + 1):
@@ -140,39 +139,41 @@ cdef class cb_universal_context:
                 local_res.append((local_table[i] * local_table[j] + local_table[j] * local_table[i]) / 2)
         return self.zzbar_to_xy_marix.dot(np.array(local_res))
 
-    def F_minus_matrix(self, d):
+    def __F_matrix_impl(self, d, parity):
         """
         compute a numpy matrix corresponding to
-        v ^ d multiplication followed by x <-> -x anti-symmetrization.
+        v ^ d multiplication followed by x <-> -x (anti-)symmetrization.
         For example, the vector for
-        F^{-}_{d, \\Delta, l}(x, y) is computed by
+        F^{+}_{d, \\Delta, l}(x, y) is computed by
         F_minus = F_minus_matrix(d).dot(gBlock(ell, Delta, S, P))
         """
         aligned_index = lambda x: (self.Lambda + 2 - x[0]) * x[0] + x[1]
         local_v = self.__v_to_d(d)
-        return ((self.field(1) / 4) ** d) * np.array(map(lambda i: (np.array(map(lambda m: local_v[aligned_index(i - m)] if ((i - m)[0] >= 0 and (i - m)[1] >= 0) else d.parent(0), self.index_list)))
-            , [x for x in self.index_list if x[1] % 2 != 0]))
+        return ((self.field(1) / 4) ** d) * np.array([
+            np.array([
+                local_v[aligned_index(i - m)] if (i - m)[0] >= 0 and (i - m)[1] >= 0 else d.parent(0)
+                for m in self.index_list])
+            for i in self.index_list if i[1] % 2 == parity])
+
+    def F_minus_matrix(self, d):
+        """
+        x <-> -x anti-symmetrization
+        """
+        return self.__F_matrix_impl(d, 1)
 
     def F_plus_matrix(self, d):
         """
-        compute a numpy matrix corresponding to
-        v ^ d multiplication followed by x <-> -x symmetrization.
-        For example, the vector for
-        F^{+}_{d, \\Delta, l}(x, y) is computed by
-        F_plus = F_plus_matrix(d).dot(gBlock(ell, Delta, S, P))
+        x <-> -x symmetrization
         """
-        aligned_index = lambda x: (self.Lambda + 2 - x[0]) * x[0] + x[1]
-        local_v = self.__v_to_d(d)
-        return ((self.field(1) / 4) ** d) * np.array(map(lambda i: (np.array(map(lambda m: local_v[aligned_index(i - m)] if ((i - m)[0] >= 0 and (i - m)[1] >= 0) else d.parent(0), self.index_list)))
-            , [x for x in self.index_list if x[1] % 2 == 0]))
+        return self.__F_matrix_impl(d, 0)
 
     def univariate_func_prod(self, x, y):
-        return np.array(map(lambda i: x[0:i + 1].dot(y[i::-1]), range(self.Lambda + 1)))
+        return np.array([x[0:i + 1].dot(y[i::-1]) for i in range(self.Lambda + 1)])
 
     def SDP(self, normalization, objective, pvm):
         return SDP(normalization, objective, pvm, context=self)
 
-    def damped_rational(self, poles, c):
+    def damped_rational(self, poles, c=1):
         return damped_rational(poles, 4 * self.rho, c, self)
 
     def prefactor_numerator(self, pref, array):
@@ -198,30 +199,6 @@ cdef class cb_universal_context:
         """
         pref = self.damped_rational([], 1)
         return self.prefactor_numerator(pref, vector)
-
-    def lcms(self, preflist):
-        # type: (List[damped_rational]) -> Tuple[damped_rational, List[Dict[RealNumber, int]]]
-        res = dict()  # type: Dict[RealNumber, int]
-        for pref in preflist:
-            d_order = pref.poles  # type: Dict[RealNumber, int]
-            for Delta in d_order:
-                if Delta in res:
-                    res[Delta] = max(res[Delta], d_order[Delta])
-                else:
-                    # `res[Delta] = d_order[Delta]` does not work... why?
-                    res.update({Delta: d_order[Delta]})
-        rems = []  # type: List[Dict[RealNumber, int]]
-        for pref in preflist:
-            d_order = pref.poles  # type: Dict[RealNumber, int]
-            rem = dict()  # type: Dict[RealNumber, int]
-            for Delta in res:
-                mr = res[Delta]
-                if Delta in d_order:
-                    mr -= d_order[Delta]
-                if mr > 0:
-                    rem[Delta] = mr
-            rems.append(rem)
-        return (self.damped_rational(res, self(1)), rems)
 
     def join(self, l):
         dims = dict()
@@ -250,9 +227,10 @@ cdef class cb_universal_context:
                         dims[n] = len_x
                     elif dims[n] != len_x:
                         raise RuntimeError("Input has inconsistent dimensions.")
-        res_pref, pref_rems = self.lcms([pn.prefactor for pn in pns])
-        for ind, pn, rem in zip(pnindices, pns, pref_rems):
-            bodies[ind] = __mult_poles(rem, pn.prefactor.pref_constant * pn.matrix, self)
+        res_pref_poles = damped_rational.poles_max(pn.prefactor for pn in pns)
+        res_pref = self.damped_rational(res_pref_poles)
+        for ind, pn in zip(pnindices, pns):
+            bodies[ind] =  res_pref.div(pn.prefactor).denominator(self.Delta) * pn.matrix
         res = np.ndarray((nrow, nrow, sum(dims[x] for x in dims)), dtype='O')
         for i in range(nrow):
             for j in range(nrow):
@@ -357,7 +335,7 @@ cdef mpfr_t* pole_integral_c(x_power_max, base, pole_position, order_of_pole, mp
     a = RealField(2 * prec)(pole_position)
     b = RealField(2 * prec)(base)
     if a < 0:
-        incomplete_gamma = b ** a * gamma(0, a * b.log())
+        incomplete_gamma = b ** a * gamma(0, a * log(b))
     elif a == 0:
         incomplete_gamma = RealField(prec)(prec)
     else:
@@ -396,7 +374,7 @@ cpdef prefactor_integral(pole_data, base, int x_power, prec, c=1):
         else:
             raise NotImplementedError
     if n == 0:
-        minus_ln_b = -1 / ((RealField(prec)(base)).log())
+        minus_ln_b = -1 / log(RealField(prec)(base))
         result = np.ndarray(x_power + 1, dtype='O')
         result[0] = minus_ln_b * RealField(prec)(c)
         for i in range (1, x_power + 1):
@@ -458,10 +436,10 @@ cpdef anti_band_cholesky_inverse(v, n_order_max, prec):
     if not isinstance(n_max, int):
         raise TypeError
     if len(v) < n_max * 2 + 1:
-        print ("input vector is too short..")
+        print("input vector is too short..")
         raise TypeError
     if n_max < 0:
-        print ("expected n_max to be positive integer...")
+        print("expected n_max to be positive integer...")
         raise TypeError
 
     cdef mpfr_t* anti_band_input = <mpfr_t*> malloc(sizeof(mpfr_t) * len(v))
@@ -496,30 +474,23 @@ cpdef anti_band_cholesky_inverse(v, n_order_max, prec):
     return result
 
 
-def max_index(_v):
-    return sorted(map(lambda x, y: [x, y], _v, range(
-        0, len(_v))), key=lambda x: x[0].abs(), reverse=True)[0][1]
-
+def max_index(v):
+    # type: (Iterable[T]) -> int
+    return max(enumerate(v), key=lambda x: abs(x[1]))[0]
 
 def normalizing_component_subtract(m, normalizing_vector):
     assert isinstance(normalizing_vector, np.ndarray), "normalizing_vector must be np.ndarray, but is {0}".format(
         type(normalizing_vector))
-    __index = max_index(normalizing_vector)
-    __deleted_normalizing_vector = (
-        1 / normalizing_vector[__index]) * np.delete(normalizing_vector, __index)
     if len(m) != len(normalizing_vector):
         raise RuntimeError(
             "length of normalizing vector and target object must be equal.")
+    __index = max_index(normalizing_vector)
+    __deleted_normalizing_vector = (
+        1 / normalizing_vector[__index]) * np.delete(normalizing_vector, __index)
     return np.insert(
-        np.delete(
-            m,
-            __index,
-            0) -
-        __deleted_normalizing_vector *
-        m[__index],
+        np.delete(m, __index, 0) - __deleted_normalizing_vector * m[__index],
         0,
-        m[__index] /
-        normalizing_vector[__index])
+        m[__index] / normalizing_vector[__index])
 
 
 def recover_functional(alpha, normalizing_vector):
@@ -584,8 +555,11 @@ def write_polynomial_vector(file_stream, polynomialVector):
 
 
 def laguerre_sample_points(n, field, rho):
-    return [(field(3.141592)) ** 2 * (-1 + 4 * k)
-            ** 2 / (-64 * n * (4 * rho).log()) for k in range(n)]
+    return [field(3.141592) ** 2 * (-1 + 4 * k) ** 2 / (-64 * n * log(4 * rho)) for k in range(n)]
+
+
+def __map_keys(d, f):
+    return {f(x): d[x] for x in d}
 
 
 def format_poleinfo(poles, context=None):
@@ -593,151 +567,182 @@ def format_poleinfo(poles, context=None):
         def field(x): return x
     else:
         field = context.field
+    if len(poles) == 0:
+        return dict()
     if isinstance(poles, dict):
-        res = [[field(x), poles[x]] for x in poles]
-        return dict(res)
+        return __map_keys(poles, field)
     if isinstance(poles, list):
-        if poles == []:
-            return dict()
         if not isinstance(poles[0], list):
-            m = dict([[x, 1] for x in poles])
-            for x in m:
-                m[x] = poles.count(x)
-            return dict([[field(x), m[x]] for x in m])
+            return __map_keys(Counter(poles), field)
         if len(poles[0]) == 2:
-            try:
-                res = [[field(x[0]), x[1]] for x in poles]
-                return dict(res)
-            except TypeError:
-                raise TypeError("unreadable initialization for poles")
-        raise TypeError("unreadable initialization for poles")
+            return {field(x[0]): x[1] for x in poles}
+    raise TypeError("unreadable initialization for poles")
 
 
 
 cdef class damped_rational:
+    '''
+    represents a rational function f(Delta) = pref_constant * (base ** Delta) / (polynomial of Delta),
+    where (polynomial of Delta) = \\prod_{i \\in poles} (Delta - i) ** poles[i]
+    '''
+
     def __cinit__(self, poles, base, c, cb_universal_context context):
-        self.base = context.field(base)
-        self.pref_constant = context.field(c)
-        self.context = context
+        self.__base = context.field(base)  # type: RealNumber
+        self.__pref_constant = context.field(c)  # type: RealNumber
+        self.__context = context  # type: RealField_class
 
     def __init__(self, poles, base, c, cb_universal_context context):
-        self.poles = format_poleinfo(poles, context)
+        self.__poles = format_poleinfo(poles, context)  # type: Dict[RealNumber, int]
 
+    # return new rational g(Delta), where f(Delta + shift) = g(Delta)
     def shift(self, shift):
-        new_poles = [[x - shift, self.poles[x]] for x in self.poles]
-        new_const = self.pref_constant * self.base ** shift
-        return damped_rational(new_poles, self.base, new_const, self.context)
+        # type: (RealNumber) -> damped_rational
+        new_poles = [[x - shift, self.__poles[x]] for x in self.__poles]
+        new_const = self.__pref_constant * self.__base ** shift
+        return damped_rational(new_poles, self.__base, new_const, self.__context)
 
+    # evaluate f(x)
     def __call__(self, x):
-        return self.pref_constant * (self.base ** x) * (1 / reduce(lambda z, w: z * w, [(x - y) ** (self.poles[y]) for y in self.poles], 1))
+        return (self.__base ** x) / self.denominator(x)
+
+    # evaluate denominator of f(x)
+    def denominator(self, x):
+        return reduce(lambda z, w: z * w, [(x - y) ** self.__poles[y] for y in self.__poles], 1 / self.__pref_constant)
 
     def orthogonal_polynomial(self, order):
-        passed_poles = [[x, self.poles[x]] for x in self.poles]
-        return anti_band_cholesky_inverse(prefactor_integral(passed_poles, self.base, order, self.context.precision, self.pref_constant), order // 2, self.context.precision)
+        passed_poles = [[x, self.__poles[x]] for x in self.__poles]
+        return anti_band_cholesky_inverse(prefactor_integral(passed_poles, self.__base, order, self.__context.precision, self.__pref_constant), order // 2, self.__context.precision)
+
+    @staticmethod
+    def from_poleinfo(poles, context):
+        return damped_rational(poles, context(1), context(1), context)
+
+    @staticmethod
+    def poles_max(poles_list):
+        # type: (Iterable[Union[damped_rational, Dict[RealNumber, int]]]) -> Dict[RealNumber, int]
+        ans = dict()
+        for p in poles_list:
+            if isinstance(p, damped_rational):
+                p = p.__poles
+            for x in p:
+                if x not in ans:
+                    ans[x] = p[x]
+                else:
+                    ans[x] = max(ans[x], p[x])
+        return ans
+
+    @staticmethod
+    def poles_min(poles_list):
+        # type: (Iterable[Dict[RealNumber, int]]) -> Dict[RealNumber, int]
+        ans = None
+        keys = None
+        for p in poles_list:
+            if isinstance(p, damped_rational):
+                p = p.__poles
+            if ans is None:
+                ans = copy.copy(p)
+                keys = set(ans)
+            else:
+                kp = set(p)
+                for x in keys - kp:
+                    del ans[x]
+                keys &= kp
+                for x in keys:
+                    ans[x] = min(ans[x], p[x])
+        return ans
+
+    @staticmethod
+    def poles_add(poles_list):
+        # type: (Iterable[Dict[RealNumber, int]]) -> Dict[RealNumber, int]
+        ans = dict()
+        for p in poles_list:
+            if isinstance(p, damped_rational):
+                p = p.__poles
+            for x in p:
+                if x not in ans:
+                    ans[x] = p[x]
+                else:
+                    ans[x] += p[x]
+        return ans
+
+    @staticmethod
+    def poles_subtract(poles, poles_list):
+        # type: (Dict[RealNumber, int], Iterable[Dict[RealNumber, int]]) -> Dict[RealNumber, int]
+        ans = copy.copy(poles)
+        for p in poles_list:
+            if isinstance(p, damped_rational):
+                p = p.__poles
+            for x in p:
+                if x not in ans:
+                    raise RuntimeError("could not delete pole, {0}".format(p[x]))
+                ans[x] -= p[x]
+                if ans[x] < 0:
+                    raise RuntimeError("could not delete pole")
+                if ans[x] == 0:
+                    del ans[x]
+        return ans
 
     def __mul__(self, y):
-        if isinstance(y, damped_rational):
-            res_poles = copy.copy(self.poles)
-            orig_keys = set(res_poles)
-            for x in y.poles:
-                if x in orig_keys:
-                    res_poles[x] = res_poles[x] + y.poles[x]
-                else:
-                    res_poles[x] = y.poles[x]
-            new_base = self.base * y.base
-            new_const = self.pref_constant * y.pref_constant
-            return damped_rational(res_poles, new_base, new_const, self.context)
-        else:
-            raise TypeError("damped_rational must be multiplied with itself")
+        # type: (damped_rational) -> damped_rational
+        if not isinstance(y, damped_rational):
+            raise NotImplementedError
+        res_poles = damped_rational.poles_add((self.__poles, y.__poles))
+        new_base = self.__base * y.__base
+        new_const = self.__pref_constant * y.__pref_constant
+        return damped_rational(res_poles, new_base, new_const, self.__context)
 
+    def div(self, y):
+        # type: (damped_rational) -> damped_rational
+        if not isinstance(y, damped_rational):
+            raise NotImplementedError
+        res_poles = damped_rational.poles_subtract(self.__poles, (y.__poles, ))
+        new_base = self.__base / y.__base
+        new_const = self.__pref_constant / y.__pref_constant
+        return damped_rational(res_poles, new_base, new_const, self.__context)
+
+    def __div__(self, y):
+        return self.div(y)
+
+    # this method does not change self
     def add_poles(self, location):
-        location_new = format_poleinfo(location)
-        res_poles = copy.copy(self.poles)
-        for x in location_new:
-            if x in res_poles:
-                res_poles[x] = res_poles[x] + location_new[x]
-            else:
-                res_poles[x] = location_new[x]
-        return damped_rational(res_poles, self.base, self.pref_constant, self.context)
-
-    def remove_poles(self, location):
-        res_poles = copy.copy(self.poles)
-        location_new = format_poleinfo(location)
-        for x in location_new:
-            if x not in res_poles:
-                raise RuntimeError("could not delete pole")
-            ind = res_poles[x] - location_new[x]
-            if ind > 0:
-                res_poles[x] = ind
-            elif ind == 0:
-                del res_poles[x]
-            else:
-                raise RuntimeError("could not delete pole")
-        return damped_rational(res_poles, self.base, self.pref_constant, self.context)
+        # type: (Union[Dict[RealNumber, int], List[RealNumber], List[Tuple[RealNumber, int]]]) -> damped_rational
+        res_poles = damped_rational.poles_add((self.__poles, format_poleinfo(location)))
+        return damped_rational(res_poles, self.__base, self.__pref_constant, self.__context)
 
     def lcm(self, p):
-        if isinstance(p, damped_rational):
-            if self.base != p.base:
-                raise RuntimeError("two damped-rational must have the same base!")
-            if p == self:
-                return (self, dict(), dict())
-        else:
+        # type: (dampled_rational) -> damped_rational
+        if not isinstance(p, damped_rational):
             raise TypeError("lcm supported only between damped_rationals")
+        if self.__base != p.__base:
+            raise RuntimeError("two damped-rational must have the same base!")
+        # if p == self:
+            # return self
 
-        dict1 = self.poles
-        dict2 = p.poles
+        return damped_rational(
+            damped_rational.poles_max((self.__poles, p.__poles)),
+            self.__base, self.__pref_constant * p.__pref_constant, self.__context)
 
-        def help_lcm(x):
-            val1 = dict1[x]
-            val2 = dict2[x]
-            if val1 > val2:
-                return ((x, val1), (x, 0), (x, val1 - val2))
-            if val2 > val1:
-                return ((x, val2), (x, val2 - val1), (x, 0))
-            return ((x, val2), (x, 0), (x, 0))
+    def gcd(self, p):
+        # type: (dampled_rational) -> damped_rational
+        if not isinstance(p, damped_rational):
+            raise TypeError("gcd supported only between damped_rationals")
+        # if p == self:
+            # return self
 
-        result_1, self_rem, p_rem = \
-                zip(*(help_lcm(x) for x in dict2 if x in dict1))
-
-        l1 = [(x, dict2[x]) for x in dict2 if x not in dict1]
-        l2 = [(x, dict1[x]) for x in dict1 if x not in dict2]
-
-        result_poles = dict(list(result_1) + l1 + l2)
-        numerator_for_self = dict(l1 + [x for x in self_rem if x[1] != 0])
-        numerator_for_p = dict(l2 + [x for x in p_rem if x[1] != 0])
-
-        res = damped_rational(result_poles, self.base, \
-                self.context(1), self.context)
-        return res, numerator_for_self, numerator_for_p
+        return damped_rational(
+            damped_rational.poles_min((self.__poles, p.__poles)),
+            1, 1, self.__context)
 
     def __repr__(self):
-        output = repr(self.pref_constant) + "*(" + repr(self.base) + ")**Delta /"
-        for x in self.poles:
-            output = output + "(Delta"
-            if x > 0:
-                output = output + "-" + repr(x) + ")"
-            elif x == 0:
-                output = output + ")"
-            else:
-                output = output + "+" + repr(-x) + ")"
-            if self.poles[x] != 1:
-                output = output + "**" + repr(self.poles[x])
-            output = output + "*"
-        return output[:-1]
-
-    def __richcmp__(x, y, op):
-        # 0: <, 1: <=, 2: ==, 3: !=, 4: >, 5: >=
-        if op == 2:
-            return x.__is_equal(y)
-        if op == 3:
-            return not x.__is_equal(y)
-        assert False
-
-    def __is_equal(self, x):
-        if not isinstance(x, damped_rational):
-            return False
-        return self.base == x.base and self.pref_constant == x.pref_constant \
-                and self.poles == x.poles
+        def pole_str(x):
+            output = "(Delta"
+            if x != 0:
+                output += "{0}{1}".format("-" if x > 0 else "+", repr(abs(x)))
+            output += ")"
+            if self.__poles[x] != 1:
+                output += "**" + repr(self.__poles[x])
+            return output
+        return "{0}*({1})**Delta / ({2})".format(repr(self.__pref_constant), repr(self.__base), "*".join(pole_str(x) for x in self.__poles))
 
 cdef class positive_matrix_with_prefactor:
     def __cinit__(self, damped_rational prefactor, matrix, cb_universal_context context):
@@ -760,7 +765,7 @@ cdef class positive_matrix_with_prefactor:
         return normalizing_component_subtract(self.matrix, v)
 
     def write(self, file_stream, v):
-            shuffled_matrix = np.array(map(lambda x: map(lambda y: normalizing_component_subtract(y, v), x), self.matrix))
+            shuffled_matrix = np.array([[normalizing_component_subtract(y, v) for y in x] for x in self.matrix])
             sample_points = laguerre_sample_points(self.degree_max() + 1, self.context.field, self.context.rho)
             sample_scalings = map(self.prefactor, sample_points)
             orthogonal_polynomial_vector = map(self.context.Delta_Field, self.prefactor.orthogonal_polynomial(self.degree_max()))
@@ -773,12 +778,15 @@ cdef class positive_matrix_with_prefactor:
             file_stream.write(repr(len(shuffled_matrix[0])))
             file_stream.write("</cols>\n")
             file_stream.write("<elements>\n")
-            map(lambda x: map(lambda y: write_polynomial_vector(file_stream, y), x), shuffled_matrix)
+            for x in shuffled_matrix:
+                for y in x:
+                    write_polynomial_vector(file_stream, y)
             file_stream.write("</elements>\n")
             write_vector(file_stream, "samplePoints", sample_points)
             write_vector(file_stream, "sampleScalings", sample_scalings)
             file_stream.write("<bilinearBasis>\n")
-            map(lambda x : write_polynomial(file_stream, x), orthogonal_polynomial_vector)
+            for x in orthogonal_polynomial_vector:
+                write_polynomial(file_stream, x)
             file_stream.write("</bilinearBasis>\n")
             file_stream.write("</polynomialVectorMatrix>\n")
 
@@ -797,83 +805,61 @@ cdef class prefactor_numerator(positive_matrix_with_prefactor):
         return prefactor_numerator(new_pref, self.matrix, self.context)
 
     def rdot(self, M):
-        newBody = M.dot(self.matrix)
-        return prefactor_numerator(self.prefactor, newBody, self.context)
+        return prefactor_numerator(self.prefactor, M.dot(self.matrix), self.context)
 
     def shift(self, x):
         return prefactor_numerator(self.prefactor.shift(x), self.context.polynomial_vector_shift(self.matrix, x), self.context)
 
     def multiply_factored_polynomial(self, factors, C):
         """
-        multiply C * \\Prod_x  (Delta - x) ** (factors[x])!
+        multiply C * \\Prod_x  (Delta - x) ** (factors[x])
         where x in factors
         """
-        formated_poles = format_poleinfo(factors)
-        res_poles = copy.copy(self.prefactor.poles)
-        numr_new = format_poleinfo(factors)
-        pole_keys = set(res_poles)
-        remnant = dict()
-        for x in numr_new:
-            if x in pole_keys:
-                val_pole = res_poles[x]
-                val_numr = numr_new[x]
-                if val_pole < val_numr:
-                    del res_poles[x]
-                    remnant[x] = val_numr - val_pole
-                elif val_pole == val_numr:
-                    del res_poles[x]
-                else:
-                    res_poles[x] = val_pole - val_numr
-            else:
-                remnant[x] = numr_new[x]
-        remnant_poly = self.prefactor.pref_constant * reduce(lambda x, y: x * y, [(self.context.Delta - z) ** remnant[z] for z in remnant], 1)
-        result_numr = C * remnant_poly * self.matrix
-        result_pref = damped_rational(res_poles, self.prefactor.base, 1, self.context)
-        return prefactor_numerator(result_pref, result_numr, self.context)
+        # multiplication is equivalent to division by div
+        div = damped_rational(factors, 1, 1 / self.context(C), self.context)
+        gcd = damped_rational.gcd(self.prefactor, div)
+        # reduce common factor
+        new_pref = self.prefactor.div(gcd)
+        div = div.div(gcd)
+        # division by div is equivalent to multiplication by div.denominator
+        return prefactor_numerator(new_pref, div.denominator(self.context.Delta) * self.matrix, self.context)
 
     def multiply_factored_rational(self, poles, factors, C):
         return self.add_poles(poles).multiply_factored_polynomial(factors, C)
 
-    def __rmul__(self, x):
-        new_mat = x * self.matrix
-        return prefactor_numerator(self.prefactor, new_mat, self.context)
+    @staticmethod
+    def __mul_impl(x, pn):
+        return prefactor_numerator(pn.prefactor, x * pn.matrix, pn.context)
+
+    def __mul__(self, x):
+        if isinstance(self, prefactor_numerator):
+            return prefactor_numerator.__mul_impl(x, self)
+        if isinstance(x, prefactor_numerator):
+            return prefactor_numerator.__mul_impl(self, x)
+        print("type(self) = {0}, type(x) = {1}".format(type(self), type(x)))
+        raise NotImplementedError
+
+    def __pos__(self):
+        return prefactor_numerator(self.prefactor, +self.matrix, self.context)
 
     def __neg__(self):
-        new_mat = -self.matrix
-        return prefactor_numerator(self.prefactor, new_mat, self.context)
+        return prefactor_numerator(self.prefactor, -self.matrix, self.context)
 
     def __div__(self, x):
-        new_mat = self.matrix / x
-        return prefactor_numerator(self.prefactor, new_mat, self.context)
+        return prefactor_numerator(self.prefactor, self.matrix / self.context(x), self.context)
 
     def __add__(self, other):
         if not isinstance(other, prefactor_numerator):
-            raise TypeError("must be added to another prefactor_numerator")
-        new_pref, remnant_1, remnant_2 = self.prefactor.lcm(other.prefactor)
-        res_poles = new_pref.poles
-        remnant_poly1 = reduce(lambda x, y: x * y, [(self.context.Delta - z) ** remnant_1[z] for z in remnant_1], \
-        self.prefactor.pref_constant)
-        remnant_poly2 = reduce(lambda x, y: x * y, [(self.context.Delta - z) ** remnant_2[z] for z in remnant_2], \
-        other.prefactor.pref_constant)
-        new_matrix = remnant_poly1 * self.matrix \
-                + remnant_poly2 * other.matrix
-        return prefactor_numerator(new_pref, new_matrix, self.context)
-
-    def new_join(self, other):
-        if not isinstance(other, prefactor_numerator):
-            raise TypeError("must be joined with another prefactor_numerator instance")
-        new_pref, remnant_1, remnant_2 = self.prefactor.lcm(other.prefactor)
-        res_poles = new_pref.poles
-        remnant_poly1 = reduce(lambda x, y: x * y, [(self.context.Delta - z) ** remnant_1[z] for z in remnant_1], \
-        self.prefactor.pref_constant)
-        remnant_poly2 = reduce(lambda x, y: x * y, [(self.context.Delta - z) ** remnant_2[z] for z in remnant_2], \
-        other.prefactor.pref_constant)
-        new_matrix = np.concatenate((remnant_poly1 * self.matrix, remnant_poly2 * other.matrix))
+            raise NotImplementedError
+        new_pref = self.prefactor.lcm(other.prefactor)
+        rem1 = new_pref.div(self.prefactor).denominator(self.context.Delta)
+        rem2 = new_pref.div(other.prefactor).denominator(self.context.Delta)
+        new_matrix = rem1 * self.matrix + rem2 * other.matrix
         return prefactor_numerator(new_pref, new_matrix, self.context)
 
     def __sub__(self, x):
         if not isinstance(x, prefactor_numerator):
-            raise TypeError("must be added to another prefactor_numerator")
+            raise NotImplementedError
         return self.__add__(x.__neg__())
 
     def __call__(self, x):
@@ -901,8 +887,7 @@ def functional_to_spectra(ef_path, problem, context, label=None):
     polys = [Matrix(x.matrix.dot(alpha)).det() for x in pvm]
     if label is None:
         label = range(len(polys))
-    efmread = map(lambda x: find_local_minima(x[0], x[1]), zip(polys, label))
-    return efmread
+    return [find_local_minima(x[0], x[1]) for x in zip(polys, label)]
 
 
 class SDP:

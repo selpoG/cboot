@@ -1,6 +1,8 @@
 from __future__ import print_function, unicode_literals
 from __future__ import division
-from future_builtins import ascii, filter, hex, map, oct, zip
+import sys
+if sys.version_info.major == 2:
+    from future_builtins import ascii, filter, hex, map, oct, zip
 from libcpp cimport bool
 from sage.libs.mpfr cimport *
 from sage.rings.real_mpfr cimport *

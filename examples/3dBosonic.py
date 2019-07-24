@@ -51,7 +51,7 @@ def bs(delta, upper=3, lower=1, sdp_method=make_SDP):
         prob.write("3d_Ising_binary.xml")
         sdpbargs = [sdpb, "-s", "3d_Ising_binary.xml"] + sdpbparams
         out, err = Popen(sdpbargs, stdout=PIPE, stderr=PIPE).communicate()
-        sol = re.compile(r'found ([^ ]+) feasible').search(out).groups()[0]
+        sol = re.compile(r'found ([^ ]+) feasible').search(str(out)).groups()[0]
         if sol == "dual":
             print("(Delta_phi, Delta_epsilon)={0} is excluded.".format(
                 (float(delta), float(D_try))))
@@ -80,7 +80,7 @@ def cc(delta):
     sdpbargs = [sdpb, "-s", "3d_Ising_cc.xml", "--noFinalCheckpoint"]
     out, err = Popen(sdpbargs, stdout=PIPE, stderr=PIPE).communicate()
     sol = re.compile(
-        r'primalObjective *= *([^ ]+) *$', re.MULTILINE).search(out).groups()[0]
+        r'primalObjective *= *([^ ]+) *$', re.MULTILINE).search(str(out)).groups()[0]
     return -delta ** 2 / float(sol)
 
 

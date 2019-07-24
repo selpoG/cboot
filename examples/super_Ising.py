@@ -127,7 +127,7 @@ def bs(delta, upper=3, lower=1, sector="0+", sdp_method=make_SDP):
         prob.write("3d_sc_binary.xml")
         sdpbargs = [sdpb, "-s", "3d_sc_binary.xml"] + sdpbparams
         out, err = Popen(sdpbargs, stdout=PIPE, stderr=PIPE).communicate()
-        sol = re.compile(r'found ([^ ]+) feasible').search(out).groups()[0]
+        sol = re.compile(r'found ([^ ]+) feasible').search(str(out)).groups()[0]
         if sol == "dual":
             print("(Delta_phi, Delta_{1})={0} is excluded.".format(
                 (float(delta), float(D_try)), sector))
@@ -149,7 +149,7 @@ def cc(delta):
 
     out, err = Popen(sdpbargs, stdout=PIPE, stderr=PIPE).communicate()
     sol = re.compile(
-        r'primalObjective *= *([^ ]+) *$', re.MULTILINE).search(out).groups()[0]
+        r'primalObjective *= *([^ ]+) *$', re.MULTILINE).search(str(out)).groups()[0]
     return -delta ** 2 / float(sol)
 
 

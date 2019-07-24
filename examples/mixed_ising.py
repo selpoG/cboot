@@ -128,8 +128,9 @@ def check(*deltas):
     prob = make_SDP(deltas)
     prob.write("3d_mixed.xml")
     sdpbargs = [sdpb, "-s", "3d_mixed.xml"] + sdpbparams
-    out, err = Popen(sdpbargs, stdout=PIPE, stderr=PIPE).communicate()
-    sol = re.compile(r'found ([^ ]+) feasible').search(str(out)).groups()[0]
+    Popen(sdpbargs, stdout=PIPE, stderr=PIPE)
+    with open("3d_mixed.out", "r") as sr:
+        sol = re.compile(r'found ([^ ]+) feasible').search(sr.read()).groups()[0]
     if sol == "dual":
         print("(Delta_sigma, Delta_epsilon)={0} is excluded.".format(deltas))
     elif sol == "primal":

@@ -70,9 +70,10 @@ def bs(delta, upper=3, lower=1, sector="S", sdp_method=make_SDP, NSO=2):
         D_try = (upper + lower) / 2
         prob = sdp_method(delta, {(sector, 0): D_try}, NSO=NSO)
         prob.write("3d_On_binary.xml")
-        sdpbargs = [sdpb, "-s", "3d_On_binary.xml"]+sdpbparams
-        out, err = Popen(sdpbargs, stdout=PIPE, stderr=PIPE).communicate()
-        sol = re.compile(r'found ([^ ]+) feasible').search(str(out)).groups()[0]
+        sdpbargs = [sdpb, "-s", "3d_On_binary.xml"] + sdpbparams
+        Popen(sdpbargs, stdout=PIPE, stderr=PIPE)
+        with open("3d_On_binary.out", "r") as sr:
+            sol = re.compile(r'found ([^ ]+) feasible').search(sr.read()).groups()[0]
         if sol == "dual":
             print("(Delta_phi, Delta_{1})={0} is excluded.".format(
                 (float(delta), float(D_try)), sector))
@@ -106,9 +107,10 @@ def ccc(delta, NSO=20):
     prob = make_SDP_ccc(delta, {}, NSO)
     prob.write("3d_On_ccc.xml")
     sdpbargs = [sdpb, "-s", "3d_On_ccc.xml", "--noFinalCheckpoint"]
-    out, err = Popen(sdpbargs, stdout=PIPE, stderr=PIPE).communicate()
-    sol = re.compile(
-        r'primalObjective *= *([^ ]+) *$', re.MULTILINE).search(str(out)).groups()[0]
+    Popen(sdpbargs, stdout=PIPE, stderr=PIPE)
+    with open("3d_On_ccc.out", "r") as sr:
+        sol = re.compile(
+            r'primalObjective *= *([-+0-9.e]+)', re.MULTILINE).search(sr.read()).groups()[0]
     return -1 / float(sol)
 
 
@@ -119,12 +121,12 @@ if __name__ == "__main__":
     # ======================================
     # if you want to derive the bound on Delta_T
     #
-    # print(bs(0.52, sector="T"))
+    print(bs(0.52, sector="T"))
 
     # ======================================
     # Current central charge lowr bound for O(20)
     #
-    # print(ccc(0.50639, NSO=20) / 2)
+    print(ccc(0.50639, NSO=20) / 2)
     #
     # Delta_phi value 0.50369 is taken from 1307.6856
     # Large N prediction for O(20) vector model is 0.9639

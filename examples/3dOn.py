@@ -3,7 +3,6 @@ from __future__ import division
 import sys
 if sys.version_info.major == 2:
     from future_builtins import ascii, filter, hex, map, oct, zip
-from subprocess import Popen, PIPE
 import sage.cboot as cb
 import numpy as np
 from subprocess import Popen, PIPE
@@ -77,8 +76,9 @@ def bs(delta, upper=3, lower=1, sector="S", sdp_method=make_SDP, NSO=2):
         prob = sdp_method(delta, {(sector, 0): D_try}, NSO=NSO)
         prob.write("3d_Ising_binary.xml")
         sdpbargs = [sdpb, "-s", "3d_Ising_binary.xml"] + sdpbparams
-        out, err = Popen(sdpbargs, stdout=PIPE, stderr=PIPE).communicate()
-        sol = re.compile(r'found ([^ ]+) feasible').search(str(out)).groups()[0]
+        Popen(sdpbargs, stdout=PIPE, stderr=PIPE)
+        with open("3d_Ising_binary.out", "r") as sr:
+            sol = re.compile(r'found ([^ ]+) feasible').search(sr.read()).groups()[0]
         if sol == "dual":
             print("(Delta_phi, Delta_{1})={0} is excluded.".format(
                 (float(delta), float(D_try)), sector))
@@ -99,4 +99,4 @@ if __name__ == "__main__":
     # ======================================
     # if you want to derive the bound on Delta_T
     #
-    # print(bs(0.52, sector="T"))
+    print(bs(0.52, sector="T"))

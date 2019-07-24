@@ -43,7 +43,7 @@ def cSCblock(nu_max, spin, Delta=None):
             g = context.approx_cb(
                 nu_max, spin + shift[0]).shift(shift[1]).multiply_factored_rational(poles, factors, C)
         else:
-            g = context.gBlock(spin + shift[0], Delta+shift[1], 0, 0)
+            g = context.gBlock(spin + shift[0], Delta + shift[1], 0, 0)
             for x in poles:
                 g = g / (Delta - context(x))
             for x in factors:
@@ -126,8 +126,9 @@ def bs(delta, upper=3, lower=1, sector="0+", sdp_method=make_SDP):
         prob = sdp_method(delta, {(sector, 0): D_try})
         prob.write("3d_sc_binary.xml")
         sdpbargs = [sdpb, "-s", "3d_sc_binary.xml"] + sdpbparams
-        out, err = Popen(sdpbargs, stdout=PIPE, stderr=PIPE).communicate()
-        sol = re.compile(r'found ([^ ]+) feasible').search(str(out)).groups()[0]
+        Popen(sdpbargs, stdout=PIPE, stderr=PIPE)
+        with open("3d_sc_binary.out", "r") as sr:
+            sol = re.compile(r'found ([^ ]+) feasible').search(sr.read()).groups()[0]
         if sol == "dual":
             print("(Delta_phi, Delta_{1})={0} is excluded.".format(
                 (float(delta), float(D_try)), sector))
@@ -146,10 +147,10 @@ def cc(delta):
                                            context.epsilon), obj_point=("0+", 0, 0))
     prob.write("3dsc_cc.xml")
     sdpbargs = [sdpb, "-s", "3dsc_cc.xml", "--noFinalCheckpoint"]
-
-    out, err = Popen(sdpbargs, stdout=PIPE, stderr=PIPE).communicate()
-    sol = re.compile(
-        r'primalObjective *= *([^ ]+) *$', re.MULTILINE).search(str(out)).groups()[0]
+    Popen(sdpbargs, stdout=PIPE, stderr=PIPE)
+    with open("3dsc_cc.out", "r") as sr:
+        sol = re.compile(
+            r'primalObjective *= *([-+0-9.e]+)', re.MULTILINE).search(sr.read()).groups()[0]
     return -delta ** 2 / float(sol)
 
 
@@ -161,4 +162,4 @@ if __name__ == '__main__':
     # If you want to derive the central charge lower bound,
     # uncomment the following.
     #
-    # print(cc(0.6666))
+    print(cc(0.6666))

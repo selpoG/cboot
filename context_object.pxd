@@ -24,7 +24,7 @@ cdef extern from "sage/cboot/context_variables.h":
     cb_context context_construct(long nMax, mpfr_prec_t prec, int Lambda)
     void clear_cb_context(cb_context context)
 
-cdef class cb_universal_context:
+cdef class cb_universal_context(object):
     cdef cb_context c_context
     cdef public mpfr_prec_t precision
     cdef public RealField_class field
@@ -44,13 +44,13 @@ cdef class cb_universal_context:
     cdef public object null_ftype
     cdef public object null_htype
 
-cdef class damped_rational:
+cdef class damped_rational(object):
     cdef public object __poles
     cdef public RealNumber __base
     cdef public RealNumber __pref_constant
     cdef public cb_universal_context __context
 
-cdef class positive_matrix_with_prefactor:
+cdef class positive_matrix_with_prefactor(object):
     cdef public damped_rational prefactor
     cdef public cb_universal_context context
     cdef public object matrix

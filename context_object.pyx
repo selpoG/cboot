@@ -64,7 +64,7 @@ def z_zbar_derivative_to_x_y_derivative_Matrix(Lambda, field=RealField(400)):
     return result
 
 
-cdef class cb_universal_context:
+cdef class cb_universal_context(object):
     """
     Class to store a bunch of frequently used datum, like
     precision, cutoff parameter Lambda, and the matrix representing
@@ -585,8 +585,7 @@ def format_poleinfo(poles, context=None):
     raise TypeError("unreadable initialization for poles")
 
 
-
-cdef class damped_rational:
+cdef class damped_rational(object):
     '''
     represents a rational function f(Delta) = pref_constant * (base ** Delta) / (polynomial of Delta),
     where (polynomial of Delta) = \\prod_{i \\in poles} (Delta - i) ** poles[i]
@@ -753,7 +752,7 @@ cdef class damped_rational:
             return output
         return "{0}*({1})**Delta / ({2})".format(repr(self.__pref_constant), repr(self.__base), "*".join(pole_str(x) for x in self.__poles))
 
-cdef class positive_matrix_with_prefactor:
+cdef class positive_matrix_with_prefactor(object):
     def __cinit__(self, damped_rational prefactor, matrix, cb_universal_context context):
         self.prefactor = prefactor
         self.context = context
@@ -899,7 +898,7 @@ def functional_to_spectra(ef_path, problem, context, label=None):
     return [find_local_minima(p, l) for p, l in zip(polys, label)]
 
 
-class SDP:
+class SDP(object):
     def __init__(
             self,
             normalization,

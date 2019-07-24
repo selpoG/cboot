@@ -13,7 +13,7 @@ from cysignals.signals cimport sig_on, sig_off
 from collections import Counter
 from functools import reduce
 
-class k_poleData:
+class k_poleData(object):
     """
     poleData(type, k, a, b, context):
     A class containing the information about the poles and residues of
@@ -57,7 +57,7 @@ class k_poleData:
             self.descendant_level(), self.residueDelta(), -2 * self.a, 2 * self.b)
 
 
-class k_rational_approx_data:
+class k_rational_approx_data(object):
     """
     rational_aprrox_data(self, cutoff, epsilon, ell, Delta_1_2=0, Delta_3_4=0, is_correlator_multiple=True, scheme="no approx pole", cutoff_for_approximating_pole=0)
     computes and holds rational approximation of conformal block datum.
@@ -126,7 +126,7 @@ class k_rational_approx_data:
             self.context.rho_to_delta, self.approx_chiral_h())
 
 
-class g_rational_approx_data_two_d:
+class g_rational_approx_data_two_d(object):
     """
     We use a different class for d = 2,
     utilizing the exact formula by Dolan and Osborn.
@@ -305,7 +305,7 @@ cdef class scalar_cb_context_generic(cb_universal_context):
         return g
 
 
-class poleData:
+class poleData(object):
     """
     poleData(type, k, ell, a, b, context):
     A class containing the information about the poles and residues of
@@ -405,7 +405,7 @@ class poleData:
                                                          self.residueEll(), self.residueDelta(), self.S(), self.P())
 
 
-class rational_approx_data_generic_dim:
+class rational_approx_data_generic_dim(object):
     """
     rational_aprrox_data(self, cutoff, epsilon, ell, Delta_1_2=0, Delta_3_4=0, approximate_poles=True)
     computes and holds rational approximation of conformal block datum.
@@ -638,7 +638,7 @@ cdef class scalar_cb_4d_context(scalar_cb_context_generic):
         return g_rational_approx_data_four_d(self, cutoff, ell, Delta_1_2, Delta_3_4, is_correlator_multiple, approximate_poles)
 
 
-class g_rational_approx_data_four_d:
+class g_rational_approx_data_four_d(object):
     def __init__(self, context, cutoff, ell, Delta_1_2, Delta_3_4,
                  is_correlator_multiple, approximate_poles=True):
         self.cutoff = cutoff

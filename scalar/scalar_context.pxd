@@ -1,14 +1,11 @@
-from sage.libs.mpfr cimport *
-from sage.rings.real_mpfr cimport *
-from sage.cboot.context_object cimport *
+from sage.libs.mpfr cimport mpfr_t
+from sage.cboot.context_object cimport cb_context
 
 cdef extern from "stdlib.h":
-    void* malloc(size_t size)
     void free(void* ptr)
 
 cdef extern from "hor_recursion.h":
     mpfr_t* h_asymptotic(mpfr_t epsilon, mpfr_t S, cb_context context)
-    mpfr_t* real_axis_result(mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S, mpfr_t P, cb_context context)
     mpfr_t* gBlock_full(mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S, mpfr_t P, cb_context context)
     mpfr_t* hBlock_times_rho_n(unsigned long n, mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S, mpfr_t P, cb_context context)
 

@@ -1,16 +1,19 @@
-from __future__ import print_function, unicode_literals, division
+from __future__ import division, print_function, unicode_literals
+
+import re
 import sys
+from subprocess import Popen
+
+import numpy as np
+
+import sage.cboot as cb
+
 if sys.version_info.major == 2:
     from future_builtins import ascii, filter, hex, map, oct, zip
-    from subprocess import Popen
     import os
     DEVNULL = open(os.devnull, 'wb')
 else:
-    from subprocess import Popen, DEVNULL
-from sage.all import *
-import sage.cboot as cb
-import numpy as np
-import re
+    from subprocess import DEVNULL
 
 sdpb = "sdpb"
 sdpbparams = ["--findPrimalFeasible",

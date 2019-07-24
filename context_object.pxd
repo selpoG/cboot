@@ -1,10 +1,9 @@
-from sage.libs.mpfr cimport *
-from sage.rings.real_mpfr cimport *
-cimport numpy as np
+from sage.libs.mpfr cimport mpfr_t, mpfr_prec_t
+from sage.rings.real_mpfr cimport RealField_class, RealNumber
 
 cdef extern from "stdlib.h":
     void* malloc(size_t size)
-    void free (void* ptr)
+    void free(void* ptr)
 
 cdef extern from "sage/cboot/integral_decomp.h":
     mpfr_t* simple_pole_case_c(long pole_order_max, mpfr_t base, mpfr_t pole_position, mpfr_t incomplete_gamma_factor, mpfr_prec_t prec)

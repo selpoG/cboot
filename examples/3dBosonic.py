@@ -1,14 +1,17 @@
-from __future__ import print_function, unicode_literals, division
+from __future__ import division, print_function, unicode_literals
+
+import re
 import sys
+from subprocess import Popen
+
+import sage.cboot as cb
+
 if sys.version_info.major == 2:
     from future_builtins import ascii, filter, hex, map, oct, zip
-    from subprocess import Popen
     import os
     DEVNULL = open(os.devnull, 'wb')
 else:
-    from subprocess import Popen, DEVNULL
-import re
-import sage.cboot as cb
+    from subprocess import DEVNULL
 
 context = cb.context_for_scalar(epsilon=0.5, Lambda=13)
 lmax = 25
@@ -55,7 +58,8 @@ def bs(delta, upper=3, lower=1, sdp_method=make_SDP):
         sdpbargs = [sdpb, "-s", "3d_Ising_binary.xml"] + sdpbparams
         Popen(sdpbargs, stdout=DEVNULL, stderr=DEVNULL).wait()
         with open("3d_Ising_binary.out", "r") as sr:
-            sol = re.compile(r'found ([^ ]+) feasible').search(sr.read()).groups()[0]
+            sol = re.compile(
+                r'found ([^ ]+) feasible').search(sr.read()).groups()[0]
         if sol == "dual":
             print("(Delta_phi, Delta_epsilon)={0} is excluded.".format(
                 (float(delta), float(D_try))))

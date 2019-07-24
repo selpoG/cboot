@@ -1,17 +1,26 @@
-from __future__ import print_function, unicode_literals
-from __future__ import division
+from __future__ import division, print_function, unicode_literals
+
 import sys
-if sys.version_info.major == 2:
-    from future_builtins import ascii, filter, hex, map, oct, zip
-import numpy as np
-from libcpp cimport bool
-from sage.cboot.context_object cimport *
-from sage.cboot.scalar.scalar_context cimport *
-from sage.cboot.context_object import SDP, get_dimG, format_poleinfo, is_integer
-from sage.all import matrix, ZZ, Integer, cached_method
-from cysignals.signals cimport sig_on, sig_off
 from collections import Counter
 from functools import reduce
+
+import numpy as np
+from sage.all import Integer, matrix, ZZ
+from sage.rings.real_mpfr import RealField
+
+from sage.cboot.context_object import damped_rational, format_poleinfo, get_dimG, is_integer, prefactor_numerator, SDP
+
+if sys.version_info.major == 2:
+    from future_builtins import ascii, filter, hex, map, oct, zip
+
+from libcpp cimport bool
+from cysignals.signals cimport sig_on, sig_off
+from sage.rings.real_mpfr cimport RealField_class, RealNumber
+from sage.libs.mpfr cimport mpfr_clear, mpfr_init2, mpfr_prec_t, MPFR_RNDN, mpfr_set, mpfr_t, mpfr_zero_p
+from sage.cboot.context_object cimport cb_context, cb_universal_context
+from sage.cboot.scalar.scalar_context cimport (
+    free, h_asymptotic, gBlock_full, hBlock_times_rho_n,
+    k_table_c, chiral_h_times_rho_to_n_c, chiral_h_asymptotic_c)
 
 class k_poleData(object):
     """

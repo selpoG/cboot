@@ -1,22 +1,25 @@
-from __future__ import print_function, unicode_literals
-from __future__ import division
-import sys
-if sys.version_info.major == 2:
-    from future_builtins import ascii, filter, hex, map, oct, zip
-from libcpp cimport bool
-from sage.libs.mpfr cimport *
-from sage.rings.real_mpfr cimport *
-import numpy as np
+from __future__ import division, print_function, unicode_literals
 
-from sage.all import Matrix, is_square, sqrt, log, Integer
-cimport numpy as np
-from sage.functions.gamma import gamma
-from sage.rings.real_mpfr import RR, RealField_class, RealNumber
 import copy
 import re
+import sys
 from collections import Counter
 from functools import reduce
 
+import numpy as np
+from sage.all import Integer, is_square, log, Matrix, sqrt
+from sage.functions.gamma import gamma
+from sage.rings.real_mpfr import RealField, RealNumber, RR
+
+if sys.version_info.major == 2:
+    from future_builtins import ascii, filter, hex, map, oct, zip
+
+from libcpp cimport bool
+cimport numpy as np
+from sage.libs.mpfr cimport (
+    mpfr_prec_t, mpfr_t, mpfr_init2, mpfr_set, mpfr_clear, mpfr_mul,
+    mpfr_add, mpfr_add_ui, mpfr_set_ui, MPFR_RNDN, mpfr_set_zero)
+from sage.rings.real_mpfr cimport RealField_class
 
 def is_integer(x):
     try:

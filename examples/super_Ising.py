@@ -62,7 +62,7 @@ def cSCblock(nu_max, spin, Delta=None):
 
 cbs = dict()
 for spin in range(lmax):
-    cbs[cpin] = cSCblock(nu_max, spin)
+    cbs[spin] = cSCblock(nu_max, spin)
 
 
 def make_F(delta, sector, spin, gap_dict, Delta=None):
@@ -112,11 +112,11 @@ def make_SDP(delta, gap_dict, norm_point=("0+", 0, 0), obj_point=None):
         pvms.append(make_F(delta, "2", 0, gap_dict,
                            Delta=2 * context.epsilon + 2 - 2 * delta))
 
-    norm = make_F(delta, norm_point[0], norm_point[1], {}, Delta=norm_point[2])
+    norm = make_F(delta, norm_point[0], norm_point[1], dict(), Delta=norm_point[2])
     if obj_point is None:
         obj = 0
     else:
-        obj = make_F(delta, obj_point[0], obj_point[1], {}, Delta=obj_point[2])
+        obj = make_F(delta, obj_point[0], obj_point[1], dict(), Delta=obj_point[2])
 
     return context.sumrule_to_SDP(norm, obj, pvms)
 
@@ -146,7 +146,7 @@ def bs(delta, upper=3, lower=1, sector="0+", sdp_method=make_SDP):
 
 
 def cc(delta):
-    prob = make_SDP(delta, {}, norm_point=("0-", 1, 1 + 2 *
+    prob = make_SDP(delta, dict(), norm_point=("0-", 1, 1 + 2 *
                                            context.epsilon), obj_point=("0+", 0, 0))
     prob.write("3dsc_cc.xml")
     sdpbargs = [sdpb, "-s", "3dsc_cc.xml", "--noFinalCheckpoint"]

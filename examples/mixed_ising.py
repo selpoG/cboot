@@ -115,13 +115,13 @@ def make_SDP(deltas):
         else:
             pvms.append(make_F(deltas, "odd-", spin, gaps))
 
-    epsilon_contribution = make_F(deltas, "even", 0, {}, Delta=deltas[1])
-    sigma_contribution = make_F(deltas, "odd+", 0, {}, Delta=deltas[0])
+    epsilon_contribution = make_F(deltas, "even", 0, dict(), Delta=deltas[1])
+    sigma_contribution = make_F(deltas, "odd+", 0, dict(), Delta=deltas[0])
     for m, x in zip(epsilon_contribution, sigma_contribution):
         m[0][0] += x
     pvms.append(epsilon_contribution)
     norm = []
-    for v in make_F(deltas, "even", 0, {}, Delta=0):
+    for v in make_F(deltas, "even", 0, dict(), Delta=0):
         norm.append(v[0][0] + v[0][1] + v[1][0] + v[1][1])
     obj = 0
     return context.sumrule_to_SDP(norm, obj, pvms)

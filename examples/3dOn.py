@@ -14,7 +14,7 @@ import re
 context = cb.context_for_scalar(epsilon=0.5, Lambda=13)
 lmax = 25
 nu_max = 12
-cbs = {}
+cbs = dict()
 for spin in range(lmax):
     cbs[spin] = context.approx_cb(nu_max, spin)
 

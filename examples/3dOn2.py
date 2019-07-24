@@ -14,7 +14,7 @@ import re
 context = cb.context_for_scalar(epsilon=0.5, Lambda=13)
 lmax = 25
 nu_max = 12
-cbs = {}
+cbs = dict()
 for spin in range(lmax):
     cbs[spin] = context.approx_cb(nu_max, spin)
 
@@ -107,7 +107,7 @@ def make_SDP_ccc(delta, gap_dict, NSO):
 
 
 def ccc(delta, NSO=20):
-    prob = make_SDP_ccc(delta, {}, NSO)
+    prob = make_SDP_ccc(delta, dict(), NSO)
     prob.write("3d_On_ccc.xml")
     sdpbargs = [sdpb, "-s", "3d_On_ccc.xml", "--noFinalCheckpoint"]
     Popen(sdpbargs, stdout=DEVNULL, stderr=DEVNULL).wait()

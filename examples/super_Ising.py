@@ -1,12 +1,15 @@
-from __future__ import print_function, unicode_literals
-from __future__ import division
+from __future__ import print_function, unicode_literals, division
 import sys
 if sys.version_info.major == 2:
     from future_builtins import ascii, filter, hex, map, oct, zip
+    from subprocess import Popen
+    import os
+    DEVNULL = open(os.devnull, 'wb')
+else:
+    from subprocess import Popen, DEVNULL
 from sage.all import *
 import sage.cboot as cb
 import numpy as np
-from subprocess import Popen, PIPE
 import re
 
 sdpb = "sdpb"
@@ -126,7 +129,7 @@ def bs(delta, upper=3, lower=1, sector="0+", sdp_method=make_SDP):
         prob = sdp_method(delta, {(sector, 0): D_try})
         prob.write("3d_sc_binary.xml")
         sdpbargs = [sdpb, "-s", "3d_sc_binary.xml"] + sdpbparams
-        Popen(sdpbargs, stdout=PIPE, stderr=PIPE)
+        Popen(sdpbargs, stdout=DEVNULL, stderr=DEVNULL).wait()
         with open("3d_sc_binary.out", "r") as sr:
             sol = re.compile(r'found ([^ ]+) feasible').search(sr.read()).groups()[0]
         if sol == "dual":
@@ -147,7 +150,7 @@ def cc(delta):
                                            context.epsilon), obj_point=("0+", 0, 0))
     prob.write("3dsc_cc.xml")
     sdpbargs = [sdpb, "-s", "3dsc_cc.xml", "--noFinalCheckpoint"]
-    Popen(sdpbargs, stdout=PIPE, stderr=PIPE)
+    Popen(sdpbargs, stdout=DEVNULL, stderr=DEVNULL).wait()
     with open("3dsc_cc.out", "r") as sr:
         sol = re.compile(
             r'primalObjective *= *([-+0-9.e]+)', re.MULTILINE).search(sr.read()).groups()[0]

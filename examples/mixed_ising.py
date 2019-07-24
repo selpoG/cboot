@@ -1,11 +1,14 @@
-from __future__ import print_function, unicode_literals
-from __future__ import division
+from __future__ import print_function, unicode_literals, division
 import sys
 if sys.version_info.major == 2:
     from future_builtins import ascii, filter, hex, map, oct, zip
+    from subprocess import Popen
+    import os
+    DEVNULL = open(os.devnull, 'wb')
+else:
+    from subprocess import Popen, DEVNULL
 import sage.cboot as cb
 from sage.misc.cachefunc import cached_function
-from subprocess import Popen, PIPE
 import re
 
 sdpb = "sdpb"
@@ -128,7 +131,7 @@ def check(*deltas):
     prob = make_SDP(deltas)
     prob.write("3d_mixed.xml")
     sdpbargs = [sdpb, "-s", "3d_mixed.xml"] + sdpbparams
-    Popen(sdpbargs, stdout=PIPE, stderr=PIPE)
+    Popen(sdpbargs, stdout=DEVNULL, stderr=DEVNULL).wait()
     with open("3d_mixed.out", "r") as sr:
         sol = re.compile(r'found ([^ ]+) feasible').search(sr.read()).groups()[0]
     if sol == "dual":

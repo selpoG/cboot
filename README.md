@@ -22,7 +22,7 @@ to handle arbitrary precision number/polynomials.
 1. Edit `your/sage/src/module_list.py` to add the following items in the variable `ext_modules`.
 
    ```python
-   Extension('sage.cboot.context_object', sources=['sage/cboot/context_object.pyx', 'sage/cboot/partial_fraction.c', 'sage/cboot/integral_decomp.c', 'sage/cboot/chol_and_inverse.c', 'sage/cboot/context_variables.c'], extra_compile_args=['-std=c99'], libraries=['gmp','mpfr'], language='c'),
+   Extension('sage.cboot.context_object', sources=['sage/cboot/context_object.pyx', 'sage/cboot/partial_fraction.c', 'sage/cboot/integral_decomp.c', 'sage/cboot/chol_and_inverse.c', 'sage/cboot/context_variables.c'], extra_compile_args=['-std=c99'], libraries=['gmp', 'mpfr'], language='c'),
 
    Extension('sage.cboot.scalar_context', sources=['sage/cboot/scalar/scalar_context.pyx', 'sage/cboot/scalar/hor_formula.c', 'sage/cboot/scalar/hor_recursion.c', 'sage/cboot/scalar/k_compute.c'], include_dirs=['sage/cboot', 'sage/cboot/scalar'], depends=['sage/cboot/context_variables.h'], extra_compile_args=['-std=c99'], libraries=['gmp', 'mpfr'], language='c'),
    ```

@@ -7,7 +7,7 @@ import numpy as np
 from libcpp cimport bool
 from sage.cboot.context_object cimport *
 from sage.cboot.scalar.scalar_context cimport *
-from sage.cboot.context_object import SDP, get_dimG, format_poleinfo
+from sage.cboot.context_object import SDP, get_dimG, format_poleinfo, is_integer
 from sage.all import matrix, ZZ, Integer, cached_method
 from cysignals.signals cimport sig_on, sig_off
 from collections import Counter
@@ -525,16 +525,15 @@ class rational_approx_data_generic_dim:
 
 
 def context_for_scalar(epsilon=0.5, Lambda=15, Prec=800, nMax=250):
-    try:
-        temp = Integer(epsilon)
-        if temp == 0:
-            return scalar_cb_2d_context(Lambda, Prec, nMax)
-        if temp == 1:
-            return scalar_cb_4d_context(Lambda, Prec, nMax)
-        raise RuntimeError(
-            "Sorry, space-time dimensions d={0} is unsupported. Create it yourself and let me know!".format(2 + 2 * epsilon))
-    except TypeError:
+    if not is_integer(epsilon):
         return scalar_cb_context_generic(Lambda, Prec, nMax, epsilon)
+    epsilon = Integer(epsilon)
+    if epsilon == 0:
+        return scalar_cb_2d_context(Lambda, Prec, nMax)
+    if epsilon == 1:
+        return scalar_cb_4d_context(Lambda, Prec, nMax)
+    raise RuntimeError(
+        "Sorry, space-time dimensions d={0} is unsupported. Create it yourself and let me know!".format(2 + 2 * epsilon))
 
 
 def zzbar_anti_symm_to_xy_matrix(Lambda, field=RealField(400)):

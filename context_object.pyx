@@ -8,7 +8,7 @@ from sage.libs.mpfr cimport *
 from sage.rings.real_mpfr cimport *
 import numpy as np
 
-from sage.all import Matrix, is_square, sqrt, log
+from sage.all import Matrix, is_square, sqrt, log, Integer
 cimport numpy as np
 from sage.functions.gamma import gamma
 from sage.rings.real_mpfr import RR, RealField_class, RealNumber
@@ -17,6 +17,14 @@ import re
 from collections import Counter
 from functools import reduce
 
+
+def is_integer(x):
+    try:
+        Integer(x)
+    except TypeError:
+        return False
+    else:
+        return True
 
 def get_dimG(Lambda):
     # type: int -> int
@@ -310,13 +318,9 @@ cdef class cb_universal_context:
                     obj_list.append(np.full(dims[n], self(0), dtype='O'))
             obj = np.concatenate(obj_list)
         else:
-            try:
-                if int(objective) == 0:
-                    obj = np.full(sum(dims[n] for n in dims), self(0), dtype='O')
-                else:
-                    raise NotImplementedError("Got unrecognizable input for objective")
-            except TypeError:
+            if not is_integer(objective) or Integer(objective) != 0:
                 raise NotImplementedError("Got unrecognizable input for objective")
+            obj = np.full(sum(dims[n] for n in dims), self(0), dtype='O')
         return self.SDP(norm, obj, [self.join(sv) for sv in res])
 
     def dot(self, x, y):
@@ -365,12 +369,12 @@ cpdef prefactor_integral(pole_data, base, int x_power, prec, c=1):
 
     cdef int count = 0
     index_list = []
-    for i in range(len(pole_data)):
-        if field(pole_data[i][0]) > 0:
+    for i, pole in enumerate(pole_data):
+        if field(pole[0]) > 0:
             raise NotImplementedError("There exists a pole on the integration contour of the prefactor!")
-        if pole_data[i][1] == 1:
+        if pole[1] == 1:
             index_list.append([i, 1])
-        elif pole_data[i][1] == 2:
+        elif pole[1] == 2:
             index_list.append([i, 2])
             index_list.append([i, 1])
         else:
@@ -398,7 +402,7 @@ cpdef prefactor_integral(pole_data, base, int x_power, prec, c=1):
             is_double[i] = 0
     decompose_coeffs = fast_partial_fraction_c(pole_data_to_c, is_double, n, prec)
 
-    for i in range(len(pole_data)):
+    for i, _ in enumerate(pole_data):
         mpfr_clear(pole_data_to_c[i])
 
     free(pole_data_to_c)
@@ -445,12 +449,12 @@ cpdef anti_band_cholesky_inverse(v, n_order_max, prec):
         raise TypeError
 
     cdef mpfr_t* anti_band_input = <mpfr_t*> malloc(sizeof(mpfr_t) * len(v))
-    for i in range(len(v)):
-        r = field(v[i])
+    for i, val in enumerate(v):
+        r = field(val)
         mpfr_init2(anti_band_input[i], prec)
         mpfr_set(anti_band_input[i], <mpfr_t>(<RealNumber>r).value, MPFR_RNDN)
     cdef mpfr_t* anti_band_mat = form_anti_band(anti_band_input, <int>(n_max + 1), int(prec))
-    for i in range(len(v)):
+    for i, _ in enumerate(v):
         mpfr_clear(anti_band_input[i])
     free(anti_band_input)
     cdef mpfr_t* cholesky_decomposed = mpfr_cholesky(anti_band_mat, <int>(n_max + 1), int(prec))
@@ -538,12 +542,12 @@ def write_vector(file_stream, name, vector):
 
 def write_polynomial(file_stream, polynomial):
     file_stream.write("<polynomial>\n")
-    try:
-        __temp = polynomial.list()
-    except AttributeError:
+    if isinstance(polynomial, RealNumber):
         __temp = [polynomial]
-    if __temp == []:
-        __temp = [0]
+    else:
+        __temp = polynomial.list()
+        if __temp == []:
+            __temp = [0]
     for x in __temp:
         write_real_num(file_stream, x, "coeff")
     file_stream.write("</polynomial>\n")
@@ -761,10 +765,7 @@ cdef class positive_matrix_with_prefactor:
         return positive_matrix_with_prefactor(self.prefactor.shift(x), self.context.polynomial_vector_shift(self.matrix, x), self.context)
 
     def degree_max(self):
-        try:
-            return max((np.vectorize(lambda y: self.context.Delta_Field(y).degree())(self.matrix)).flatten())
-        except AttributeError:
-            return 0
+        return max((np.vectorize(lambda y: self.context.Delta_Field(y).degree())(self.matrix)).flatten())
 
     def normalization_subtract(self, v):
         return normalizing_component_subtract(self.matrix, v)
@@ -895,7 +896,7 @@ def functional_to_spectra(ef_path, problem, context, label=None):
     polys = [Matrix(x.matrix.dot(alpha)).det() for x in pvm]
     if label is None:
         label = range(len(polys))
-    return [find_local_minima(x[0], x[1]) for x in zip(polys, label)]
+    return [find_local_minima(p, l) for p, l in zip(polys, label)]
 
 
 class SDP:

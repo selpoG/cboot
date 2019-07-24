@@ -1,3 +1,8 @@
+from __future__ import print_function, unicode_literals
+from __future__ import division
+import sys
+if sys.version_info.major == 2:
+    from future_builtins import ascii, filter, hex, map, oct, zip
 import sage.cboot as cb
 from sage.misc.cachefunc import cached_function
 from subprocess import Popen, PIPE
@@ -32,7 +37,7 @@ def prepare_g_es(spin, Delta_se, Delta=None):
 
 
 def prepare_g(spin, Delta_se, Delta=None):
-    if Delta == None:
+    if Delta is None:
         return (prepare_g_0(spin),
                 prepare_g_se(spin, Delta_se),
                 prepare_g_es(spin, Delta_se))
@@ -50,15 +55,15 @@ def prepare_g(spin, Delta_se, Delta=None):
 def make_F(deltas, sector, spin, gap_dict, Delta=None):
     delta_s = context(deltas[0])
     delta_e = context(deltas[1])
+    delta_mean = (delta_s + delta_e) / 2
     Delta_se = delta_s - delta_e
-    if Delta == None:
-        try:
+    if Delta is None:
+        if (sector, spin) in gap_dict:
             shift = context(gap_dict[(sector, spin)])
-        except KeyError:
-            if spin == 0:
-                shift = context.epsilon
-            else:
-                shift = 2 * context.epsilon + spin
+        elif spin == 0:
+            shift = context.epsilon
+        else:
+            shift = 2 * context.epsilon + spin
         gs = [x.shift(shift) for x in prepare_g(spin, Delta_se, Delta=Delta)]
     else:
         gs = prepare_g(spin, Delta_se, Delta=Delta)
@@ -67,30 +72,28 @@ def make_F(deltas, sector, spin, gap_dict, Delta=None):
         F_s_s = context.dot(context.F_minus_matrix(delta_s), gs[0])
         F_e_e = context.dot(context.F_minus_matrix(delta_e), gs[0])
 
-        F_s_e = context.dot(context.F_minus_matrix((delta_s+delta_e)/2), gs[0])
-        H_s_e = context.dot(context.F_plus_matrix((delta_s+delta_e)/2), gs[0])
+        F_s_e = context.dot(context.F_minus_matrix(delta_mean), gs[0])
+        H_s_e = context.dot(context.F_plus_matrix(delta_mean), gs[0])
         return [[[F_s_s, 0],
                  [0, 0]],
                 [[0, 0],
                  [0, F_e_e]],
                 [[0, 0],
                  [0, 0]],
-                [[0, F_s_e/2],
-                 [F_s_e/2, 0]],
-                [[0, H_s_e/2],
-                 [H_s_e/2, 0]]]
+                [[0, F_s_e / 2],
+                 [F_s_e / 2, 0]],
+                [[0, H_s_e / 2],
+                 [H_s_e / 2, 0]]]
 
     elif sector == "odd+":
-        F_s_e = context.dot(context.F_minus_matrix(
-            (delta_s + delta_e) / 2), gs[1])
+        F_s_e = context.dot(context.F_minus_matrix(delta_mean), gs[1])
         F_e_s = context.dot(context.F_minus_matrix(delta_s), gs[2])
         H_e_s = context.dot(context.F_plus_matrix(delta_s), gs[2])
 
         return [0, 0, F_s_e, F_e_s, -H_e_s]
 
     elif sector == "odd-":
-        F_s_e = context.dot(context.F_minus_matrix(
-            (delta_s + delta_e) / 2), gs[1])
+        F_s_e = context.dot(context.F_minus_matrix(delta_mean), gs[1])
         F_e_s = context.dot(context.F_minus_matrix(delta_s), gs[2])
         H_e_s = context.dot(context.F_plus_matrix(delta_s), gs[2])
 
@@ -103,7 +106,7 @@ def make_SDP(deltas):
     pvms = []
     gaps = {("even", 0): 3, ("odd+", 0): 3}
     for spin in range(0, lmax):
-        if not spin % 2:
+        if spin % 2 == 0:
             pvms.append(make_F(deltas, "even", spin, gaps))
             pvms.append(make_F(deltas, "odd+", spin, gaps))
         else:

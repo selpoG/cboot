@@ -1,3 +1,8 @@
+from __future__ import print_function, unicode_literals
+from __future__ import division
+import sys
+if sys.version_info.major == 2:
+    from future_builtins import ascii, filter, hex, map, oct, zip
 from subprocess import Popen, PIPE
 import re
 import sage.cboot as cb
@@ -5,21 +10,19 @@ import sage.cboot as cb
 context = cb.context_for_scalar(epsilon=0.5, Lambda=13)
 lmax = 25
 nu_max = 12
-cbs = {}
+cbs = dict()
 for spin in range(0, lmax, 2):
-    g = context.approx_cb(nu_max, spin)
-    cbs.update({spin: g})
+    cbs[spin] = context.approx_cb(nu_max, spin)
 
 
 def make_F(delta, spin, gap_dict):
     mat_F = context.F_minus_matrix(delta)
-    try:
+    if spin in gap_dict:
         gap = context(gap_dict[spin])
-    except KeyError:
-        if spin == 0:
-            gap = context.epsilon
-        else:
-            gap = 2 * context.epsilon+spin
+    elif spin == 0:
+        gap = context.epsilon
+    else:
+        gap = 2 * context.epsilon + spin
     g_shift = cbs[spin].shift(gap)
     F = context.dot(mat_F, g_shift)
     return F

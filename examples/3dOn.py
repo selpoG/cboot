@@ -1,3 +1,9 @@
+from __future__ import print_function, unicode_literals
+from __future__ import division
+import sys
+if sys.version_info.major == 2:
+    from future_builtins import ascii, filter, hex, map, oct, zip
+from subprocess import Popen, PIPE
 import sage.cboot as cb
 import numpy as np
 from subprocess import Popen, PIPE
@@ -7,20 +13,18 @@ context = cb.context_for_scalar(epsilon=0.5, Lambda=13)
 lmax = 25
 nu_max = 12
 cbs = {}
-for spin in range(0, lmax):
-    g = context.approx_cb(nu_max, spin)
-    cbs.update({spin: g})
+for spin in range(lmax):
+    cbs[spin] = context.approx_cb(nu_max, spin)
 
 
 def make_F(delta, sector, spin, gap_dict, NSO):
     delta = context(delta)
-    try:
+    if (sector, spin) in gap_dict:
         gap = context(gap_dict[(sector, spin)])
-    except KeyError:
-        if spin == 0:
-            gap = context.epsilon
-        else:
-            gap = 2 * context.epsilon + spin
+    elif spin == 0:
+        gap = context.epsilon
+    else:
+        gap = 2 * context.epsilon + spin
     g_shift = cbs[spin].shift(gap)
 
     g_num = g_shift.matrix
@@ -46,9 +50,9 @@ def make_SDP(delta, gap_dict, NSO=2):
     pvms = []
     for sector in ("S", "T", "A"):
         if sector is not "A":
-            spins = [spin for spin in cbs.keys() if not spin % 2]
+            spins = [spin for spin in cbs.keys() if spin % 2 == 0]
         else:
-            spins = [spin for spin in cbs.keys() if spin % 2]
+            spins = [spin for spin in cbs.keys() if spin % 2 != 0]
         for spin in spins:
             pvms.append(make_F(delta, sector, spin, gap_dict, NSO))
 

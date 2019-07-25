@@ -9,7 +9,9 @@ import numpy as np
 from sage.all import Integer, matrix, ZZ
 from sage.rings.real_mpfr import RealField
 
-from sage.cboot.context_object import damped_rational, format_poleinfo, get_dimG, is_integer, prefactor_numerator, SDP
+from sage.cboot.context_object import (
+    damped_rational, format_poleinfo, get_dimG,
+    is_integer, prefactor_numerator, SDP)
 
 if sys.version_info.major == 2:
     from future_builtins import ascii, filter, hex, map, oct, zip
@@ -17,11 +19,18 @@ if sys.version_info.major == 2:
 from libcpp cimport bool
 from cysignals.signals cimport sig_on, sig_off
 from sage.rings.real_mpfr cimport RealField_class, RealNumber
-from sage.libs.mpfr cimport mpfr_clear, mpfr_init2, mpfr_prec_t, MPFR_RNDN, mpfr_set, mpfr_t, mpfr_zero_p
-from sage.cboot.context_object cimport cb_context, cb_universal_context
-from sage.cboot.scalar.scalar_context cimport (
-    free, h_asymptotic, gBlock_full, hBlock_times_rho_n,
-    k_table_c, chiral_h_times_rho_to_n_c, chiral_h_asymptotic_c)
+from sage.libs.mpfr cimport (
+    mpfr_clear, mpfr_init2, mpfr_prec_t,
+    MPFR_RNDN, mpfr_set, mpfr_t, mpfr_zero_p)
+# from sage.cboot.context_object cimport cb_context, cb_universal_context
+
+
+@cython.cfunc
+@cython.returns(cython.bint)
+@cython.locals(num=RealNumber)
+def RealNumber_is_zero(num):
+    return mpfr_zero_p(cython.cast(mpfr_t, cython.cast(RealNumber, num).value)) != 0
+
 
 class k_poleData(object):
     """
@@ -64,12 +73,13 @@ class k_poleData(object):
 
     def residue_of_h(self):
         return self.coeff() * self.context.chiral_h_times_rho_to_n(
-            self.descendant_level(), self.residueDelta(), -2 * self.a, 2 * self.b)
+            self.descendant_level(), self.residueDelta(),
+            -2 * self.a, 2 * self.b)
 
 
 class k_rational_approx_data(object):
     """
-    rational_aprrox_data(self, cutoff, epsilon, ell, Delta_1_2=0, Delta_3_4=0, is_correlator_multiple=True, scheme="no approx pole", cutoff_for_approximating_pole=0)
+    rational_aprrox_data(self, cutoff, epsilon, ell, Delta_1_2=0, Delta_3_4=0, is_correlator_multiple=True, approximate_poles=0)
     computes and holds rational approximation of conformal block datum.
     """
 
@@ -117,10 +127,18 @@ class k_rational_approx_data(object):
 
     def approx_chiral_h(self):
         res = self.context.chiral_h_asymptotic(self.S) * reduce(
-            lambda y, w: y * w, [(self.context.Delta - x.polePosition()) for x in self.poles])
-        _polys = [reduce(lambda y, z: y * z, [self.context.Delta - w.polePosition()
-                                             for w in self.poles if w != x]) for x in self.poles]
-        res += reduce(lambda y, w: y + w, map(lambda x, y: x.residue_of_h() * y, self.poles, _polys))
+            lambda y, w: y * w,
+            [(self.context.Delta - x.polePosition()) for x in self.poles])
+        _polys = [
+            reduce(
+                lambda y, z: y * z,
+                [
+                    self.context.Delta - w.polePosition()
+                    for w in self.poles if w != x])
+            for x in self.poles]
+        res += reduce(
+            lambda y, w: y + w,
+            map(lambda x, y: x.residue_of_h() * y, self.poles, _polys))
         if self.approx_poles != []:
             approx_matrix_inv = self.approx_matrix.transpose().inverse()
             approx_target = matrix(
@@ -180,7 +198,7 @@ class g_rational_approx_data_two_d(object):
             for j in range(i, self.context.Lambda - i + 1):
                 __zz_res.append(
                     (left_contribution[i] * right_contribution[j] +
-                     left_contribution[j] *right_contribution[i]) / 2)
+                     left_contribution[j] * right_contribution[i]) / 2)
         return self.context.zzbar_to_xy_marix.dot(np.array(__zz_res))
 
     def approx(self):
@@ -219,10 +237,15 @@ class scalar_cb_context_generic(cb_universal_context):
         sig_off()
         res = np.ndarray(self.Lambda + 1, dtype='O')
         for i in range(self.Lambda + 1):
-            res[i] = cython.cast(RealNumber, cython.cast(RealField_class, self.field)._new())
+            res[i] = cython.cast(
+                RealNumber, cython.cast(RealField_class, self.field)._new())
             cython.cast(RealNumber, res[i])._parent = self.field
-            mpfr_init2(cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value), self.precision)
-            mpfr_set(cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value), array[i], MPFR_RNDN)
+            mpfr_init2(
+                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
+                self.precision)
+            mpfr_set(
+                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
+                array[i], MPFR_RNDN)
             mpfr_clear(array[i])
         free(array)
         return res
@@ -236,10 +259,15 @@ class scalar_cb_context_generic(cb_universal_context):
             cython.cast(cb_context, self.c_context))
         res = np.ndarray(self.Lambda + 1, dtype='O')
         for i in range(self.Lambda + 1):
-            res[i] = cython.cast(RealNumber, cython.cast(RealField_class, self.field)._new())
+            res[i] = cython.cast(
+                RealNumber, cython.cast(RealField_class, self.field)._new())
             cython.cast(RealNumber, res[i])._parent = self.field
-            mpfr_init2(cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value), cython.cast(mpfr_prec_t, self.precision))
-            mpfr_set(cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value), _array[i], MPFR_RNDN)
+            mpfr_init2(
+                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
+                cython.cast(mpfr_prec_t, self.precision))
+            mpfr_set(
+                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
+                _array[i], MPFR_RNDN)
             mpfr_clear(_array[i])
         return np.array(res)
 
@@ -256,10 +284,12 @@ class scalar_cb_context_generic(cb_universal_context):
         P_c = self.field(-Delta_1_2) * self.field(Delta_3_4) / 2
 
         # In case Delta and ell = 0, return the identity_vector.
-        if mpfr_zero_p(cython.cast(mpfr_t, cython.cast(RealNumber, ell_c).value)) != 0 and mpfr_zero_p(cython.cast(mpfr_t, cython.cast(RealNumber, Delta_c).value)) != 0:
-            if mpfr_zero_p(cython.cast(mpfr_t, cython.cast(RealNumber, S_c).value)) != 0 and mpfr_zero_p(cython.cast(mpfr_t, cython.cast(RealNumber, P_c).value)) != 0:
+        if RealNumber_is_zero(ell_c) and RealNumber_is_zero(Delta_c):
+            if RealNumber_is_zero(S_c) and RealNumber_is_zero(P_c):
                 return self.identity_vector()
-            raise ValueError("Delta, ell = 0 while Delta_1_2 = {0} and Delta_3_4 = {1}".format(Delta_1_2, Delta_3_4))
+            raise ValueError(
+                "Delta, ell = 0 while Delta_1_2 = {0} and Delta_3_4 = {1}".format(
+                    Delta_1_2, Delta_3_4))
 
         sig_on()
         array = gBlock_full(
@@ -274,10 +304,15 @@ class scalar_cb_context_generic(cb_universal_context):
         dimG = get_dimG(self.Lambda)
         res = np.ndarray(dimG, dtype='O')
         for i in range(dimG):
-            res[i] = cython.cast(RealNumber, cython.cast(RealField_class, self.field)._new())
+            res[i] = cython.cast(
+                RealNumber, cython.cast(RealField_class, self.field)._new())
             cython.cast(RealNumber, res[i])._parent = self.field
-            mpfr_init2(cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value), self.precision)
-            mpfr_set(cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value), array[i], MPFR_RNDN)
+            mpfr_init2(
+                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
+                self.precision)
+            mpfr_set(
+                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
+                array[i], MPFR_RNDN)
             mpfr_clear(array[i])
 
         free(array)
@@ -290,8 +325,12 @@ class scalar_cb_context_generic(cb_universal_context):
         from x-derivatives of conformal block called array_real,
         which is a (self.Lambda + 1)-dimensional array.
         """
-        local_c2 = ell * (ell + 2 * self.epsilon) + Delta * (Delta - 2 - 2 * self.epsilon)
-        aligned_index = lambda y_del, x_del: (self.Lambda + 2 - y_del) * y_del + x_del
+        local_c2 = ell * (ell + 2 * self.epsilon) + \
+            Delta * (Delta - 2 - 2 * self.epsilon)
+
+        def aligned_index(y_del, x_del):
+            return (self.Lambda + 2 - y_del) * y_del + x_del
+
         ans = np.ndarray(get_dimG(self.Lambda), dtype='O')
         ans[0:self.Lambda + 1] = array_real
         for i in range(1, (self.Lambda // 2) + 1):
@@ -304,31 +343,40 @@ class scalar_cb_context_generic(cb_universal_context):
                     val += ans[aligned_index(i, j - 2)] * 8 * common_factor
                 if j >= 1:
                     val += -ans[aligned_index(i, j - 1)] * 4 * common_factor
-                val += (4 * (2 * P + 8 * S * i + 4 * S * j - 8 * S + 2 * local_c2 + 4 * self.epsilon * i + 4 * self.epsilon * j - 4 * self.epsilon + 4 * i ** 2 + 8 * i * j - 2 * i + j ** 2 - 5 * j - 2) / i) * ans[aligned_index(i - 1, j)]
-                val += (-self.field((j + 1) * (j + 2)) / i) * ans[aligned_index(i - 1, j + 2)]
-                val += (2 * (j + 1) * (2 * S + 2 * self.epsilon - 4 * i - j + 6) / i) * ans[aligned_index(i - 1, j + 1)]
+                val += (4 * (2 * P + 8 * S * i + 4 * S * j - 8 * S + 2 * local_c2 + 4 * self.epsilon * i + 4 * self.epsilon *
+                             j - 4 * self.epsilon + 4 * i ** 2 + 8 * i * j - 2 * i + j ** 2 - 5 * j - 2) / i) * ans[aligned_index(i - 1, j)]
+                val += (-self.field((j + 1) * (j + 2)) / i) * \
+                    ans[aligned_index(i - 1, j + 2)]
+                val += (2 * (j + 1) * (2 * S + 2 * self.epsilon - 4 *
+                                       i - j + 6) / i) * ans[aligned_index(i - 1, j + 1)]
                 if j >= 1:
-                    val += (8 * (2 * P + 8 * S * i + 2 * S * j - 10 * S - 4 * self.epsilon * i + 2 * self.epsilon * j + 2 * self.epsilon + 12 * i ** 2 + 12 * i * j - 34 * i + j ** 2 - 13 * j + 22) / self.field(i)) * ans[aligned_index(i - 1, j - 1)]
+                    val += (8 * (2 * P + 8 * S * i + 2 * S * j - 10 * S - 4 * self.epsilon * i + 2 * self.epsilon * j + 2 *
+                                 self.epsilon + 12 * i ** 2 + 12 * i * j - 34 * i + j ** 2 - 13 * j + 22) / i) * ans[aligned_index(i - 1, j - 1)]
                 if i >= 2:
-                    val += (4 * self.field((j + 1) * (j + 2)) / i) * ans[aligned_index(i - 2, j + 2)]
-                    val += (8 * (j + 1) * self.field(2 * S - 2 * self.epsilon + 4 * i + 3 * j - 6) / i) * ans[aligned_index(i - 2, j + 1)]
+                    val += (4 * self.field((j + 1) * (j + 2)) / i) * \
+                        ans[aligned_index(i - 2, j + 2)]
+                    val += (8 * (j + 1) * self.field(2 * S - 2 * self.epsilon +
+                                                     4 * i + 3 * j - 6) / i) * ans[aligned_index(i - 2, j + 1)]
 
                 ans[aligned_index(i, j)] = val / (2 * common_factor)
         return ans
 
     def rational_approx_data(self, cutoff, ell, Delta_1_2=0, Delta_3_4=0,
-                             is_correlator_multiple=False, approximate_poles=True):
+                             is_correlator_multiple=False,
+                             approximate_poles=True):
         return rational_approx_data_generic_dim(
             self, cutoff, ell, Delta_1_2, Delta_3_4,
             is_correlator_multiple, approximate_poles)
 
-    def approx_cb(self, cutoff, ell, Delta_1_2=0, Delta_3_4=0, include_odd=False, approximate_poles=True):
+    def approx_cb(self, cutoff, ell, Delta_1_2=0, Delta_3_4=0,
+                  include_odd=False, approximate_poles=True):
         if not include_odd:
             if Delta_1_2 != 0 or Delta_3_4 != 0:
                 include_odd = True
         g = self.rational_approx_data(
             cutoff, ell, Delta_1_2, Delta_3_4,
-            is_correlator_multiple=include_odd, approximate_poles=approximate_poles).approx()
+            is_correlator_multiple=include_odd,
+            approximate_poles=approximate_poles).approx()
         return g
 
 
@@ -398,38 +446,43 @@ class poleData(object):
         raise NotImplementedError
 
     def coeff(self):
+        def poch(x, n):
+            return self.context.pochhammer(x, n)
+
         local_sign = -1 if self.k % 2 != 0 else 1
-        p0 = self.context.pochhammer(1, self.k)
+        p0 = poch(1, self.k)
         common_factor = -local_sign * self.k / (p0 ** 2)
         if self.type == 1:
-            p1 = self.context.pochhammer(self.ell + 2 * self.epsilon, self.k)
-            p2 = self.context.pochhammer((1 - self.k + 2 * self.a) / 2, self.k)
-            p3 = self.context.pochhammer((1 - self.k + 2 * self.b) / 2, self.k)
-            p4 = self.context.pochhammer(self.ell + self.epsilon, self.k)
+            p1 = poch(self.ell + 2 * self.epsilon, self.k)
+            p2 = poch((1 - self.k + 2 * self.a) / 2, self.k)
+            p3 = poch((1 - self.k + 2 * self.b) / 2, self.k)
+            p4 = poch(self.ell + self.epsilon, self.k)
             return common_factor * p1 * p2 * p3 / p4
         if self.type == 2:
-            p1 = self.context.pochhammer(self.epsilon - self.k, 2 * self.k)
-            p2 = self.context.pochhammer(self.ell + self.epsilon - self.k, 2 * self.k)
-            p3 = self.context.pochhammer(self.ell + self.epsilon + 1 - self.k, 2 * self.k)
-            p4 = self.context.pochhammer((1 - self.k + self.ell - 2 * self.a + self.epsilon) / 2, self.k)
-            p5 = self.context.pochhammer((1 - self.k + self.ell + 2 * self.a + self.epsilon) / 2, self.k)
-            p6 = self.context.pochhammer((1 - self.k + self.ell - 2 * self.b + self.epsilon) / 2, self.k)
-            p7 = self.context.pochhammer((1 - self.k + self.ell + 2 * self.b + self.epsilon) / 2, self.k)
+            p1 = poch(self.epsilon - self.k, 2 * self.k)
+            p2 = poch(self.ell + self.epsilon - self.k, 2 * self.k)
+            p3 = poch(self.ell + self.epsilon + 1 - self.k, 2 * self.k)
+            tmp = (1 - self.k + self.ell + self.epsilon) / 2
+            p4 = poch(tmp - self.a, self.k)
+            p5 = poch(tmp + self.a, self.k)
+            p6 = poch(tmp - self.b, self.k)
+            p7 = poch(tmp + self.b, self.k)
             return common_factor * p1 / (p2 * p3) * p4 * p5 * p6 * p7
         if self.type == 3:
             if self.k > self.ell:
                 raise RuntimeError(
                     "pole identifier k must be k <= ell for type 3 pole.")
-            p1 = self.context.pochhammer(self.ell + 1 - self.k, self.k)
-            p2 = self.context.pochhammer((1 - self.k + 2 * self.a) / 2, self.k)
-            p3 = self.context.pochhammer((1 - self.k + 2 * self.b) / 2, self.k)
-            p4 = self.context.pochhammer(1 + self.ell + self.epsilon - self.k, self.k)
+            p1 = poch(self.ell + 1 - self.k, self.k)
+            p2 = poch((1 - self.k + 2 * self.a) / 2, self.k)
+            p3 = poch((1 - self.k + 2 * self.b) / 2, self.k)
+            p4 = poch(1 + self.ell + self.epsilon - self.k, self.k)
             return common_factor * p1 * p2 * p3 / p4
         raise NotImplementedError("pole type unrecognizable.")
 
     def residue_of_h(self):
-        return self.coeff() * self.context.h_times_rho_k(self.descendant_level(),
-                                                         self.residueEll(), self.residueDelta(), self.S(), self.P())
+        return self.coeff() * self.context.h_times_rho_k(
+            self.descendant_level(), self.residueEll(), self.residueDelta(),
+            self.S(), self.P())
 
 
 class rational_approx_data_generic_dim(object):
@@ -486,28 +539,23 @@ class rational_approx_data_generic_dim(object):
                 for i in range((dim_approx_base + 1) // 2 - 1)
             ]
             self.approx_matrix = matrix(map(self.approx_column, self.poles))
+            step = 1 if is_correlator_multiple else 2
             if is_correlator_multiple:
-                self.approx_poles = [
-                    poleData(1, x, ell, self.a, self.b, context)
-                    for x in range(cutoff + 1, 2 * cutoff + 1)
-                ] + [
-                    poleData(2, x, ell, self.a, self.b, context)
-                    for x in range(cutoff // 2 + 1, 2 * (cutoff // 2) + 1)
-                ] + [
-                    poleData(3, x, ell, self.a, self.b, context)
-                    for x in range(min(ell, cutoff // 2) + 1, ell + 1)
-                ]
+                start1 = cutoff + 1
+                start3 = min(ell, cutoff // 2) + 1
             else:
-                self.approx_poles = [
-                    poleData(1, x, ell, self.a, self.b, context)
-                    for x in range(2 * (cutoff // 2) + 2, 2 * cutoff + 2, 2)
-                ] + [
-                    poleData(2, x, ell, self.a, self.b, context)
-                    for x in range(cutoff // 2 + 1, 2 * (cutoff // 2) + 1)
-                ] + [
-                    poleData(3, x, ell, self.a, self.b, context)
-                    for x in range(2 * (min(ell, cutoff) // 2) + 2, 2 * (ell // 2) + 2, 2)
-                ]
+                start1 = 2 * (cutoff // 2) + 2
+                start3 = 2 * (min(ell, cutoff) // 2) + 2
+            self.approx_poles = [
+                poleData(1, x, ell, self.a, self.b, context)
+                for x in range(start1, 2 * cutoff + 1, step)
+            ] + [
+                poleData(2, x, ell, self.a, self.b, context)
+                for x in range(cutoff // 2 + 1, 2 * (cutoff // 2) + 1)
+            ] + [
+                poleData(3, x, ell, self.a, self.b, context)
+                for x in range(start3, ell + 1, step)
+            ]
 
     def prefactor(self):
         return damped_rational(
@@ -560,12 +608,15 @@ def context_for_scalar(epsilon=0.5, Lambda=15, Prec=800, nMax=250):
     if epsilon == 1:
         return scalar_cb_4d_context(Lambda, Prec, nMax)
     raise RuntimeError(
-        "Sorry, space-time dimensions d={0} is unsupported. Create it yourself and let me know!".format(2 + 2 * epsilon))
+        "Sorry, space-time dimensions d={0} is unsupported. Create it yourself and let me know!".format(
+            2 + 2 * epsilon))
 
 
 def zzbar_anti_symm_to_xy_matrix(Lambda, field=RealField(400)):
     if not isinstance(field, RealField_class):
-        raise TypeError("field must be instance of RealField_class, but it is {0}.".format(type(field)))
+        raise TypeError(
+            "field must be instance of RealField_class, but it is {0}.".format(
+                type(field)))
     q = ZZ[str('x')]
     dimG = get_dimG(Lambda)
     result = np.full((dimG, dimG), field(0))
@@ -577,8 +628,9 @@ def zzbar_anti_symm_to_xy_matrix(Lambda, field=RealField(400)):
                      (qminus ** j) * (qplus ** i)).padded_list()
             column_position = (Lambda + 2 - i) * i + (j - i - 1)
             parity = (i + j + 1) % 2
-            xypositions = [(Lambda + 2 - (i + j - x - 1) // 2) * (i + j - x - 1) //
-                           2 + x for x in range(parity, len(coeff), 2)]
+            xypositions = [
+                (Lambda + 2 - (i + j - x - 1) // 2) * (i + j - x - 1) // 2 + x
+                for x in range(parity, len(coeff), 2)]
             for p, c in zip(xypositions, coeff[parity::2]):
                 result[column_position][int(p)] = field(c) / 2
     return result.transpose()
@@ -595,13 +647,20 @@ class scalar_cb_2d_context(scalar_cb_context_generic):
     @cython.ccall
     def chiral_h_asymptotic(self, S):
         S_c = self.field(S)
-        _array = chiral_h_asymptotic_c(cython.cast(mpfr_t, cython.cast(RealNumber, S_c).value), cython.cast(cb_context, self.c_context))
+        _array = chiral_h_asymptotic_c(
+            cython.cast(mpfr_t, cython.cast(RealNumber, S_c).value),
+            cython.cast(cb_context, self.c_context))
         res = np.ndarray(self.Lambda + 1, dtype='O')
         for i in range(self.Lambda + 1):
-            res[i] = cython.cast(RealNumber, cython.cast(RealField_class, self.field)._new())
+            res[i] = cython.cast(
+                RealNumber, cython.cast(RealField_class, self.field)._new())
             cython.cast(RealNumber, res[i])._parent = self.field
-            mpfr_init2(cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value), cython.cast(mpfr_prec_t, self.precision))
-            mpfr_set(cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value), _array[i], MPFR_RNDN)
+            mpfr_init2(
+                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
+                cython.cast(mpfr_prec_t, self.precision))
+            mpfr_set(
+                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
+                _array[i], MPFR_RNDN)
             mpfr_clear(_array[i])
         return np.array(res)
 
@@ -621,10 +680,15 @@ class scalar_cb_2d_context(scalar_cb_context_generic):
         sig_off()
         res = np.ndarray(self.Lambda + 1, dtype='O')
         for i in range(self.Lambda + 1):
-            res[i] = cython.cast(RealNumber, cython.cast(RealField_class, self.field)._new())
+            res[i] = cython.cast(
+                RealNumber, cython.cast(RealField_class, self.field)._new())
             cython.cast(RealNumber, res[i])._parent = self.field
-            mpfr_init2(cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value), cython.cast(mpfr_prec_t, self.precision))
-            mpfr_set(cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value), _array[i], MPFR_RNDN)
+            mpfr_init2(
+                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
+                cython.cast(mpfr_prec_t, self.precision))
+            mpfr_set(
+                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
+                _array[i], MPFR_RNDN)
             mpfr_clear(_array[i])
         return np.array(res)
 
@@ -643,18 +707,31 @@ class scalar_cb_2d_context(scalar_cb_context_generic):
             cython.cast(cb_context, self.c_context))
         res = np.ndarray(self.Lambda + 1, dtype='O')
         for i in range(self.Lambda + 1):
-            res[i] = cython.cast(RealNumber, cython.cast(RealField_class, self.field)._new())
+            res[i] = cython.cast(
+                RealNumber, cython.cast(RealField_class, self.field)._new())
             cython.cast(RealNumber, res[i])._parent = self.field
-            mpfr_init2(cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value), cython.cast(mpfr_prec_t, self.precision))
-            mpfr_set(cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value), _array[i], MPFR_RNDN)
+            mpfr_init2(
+                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
+                cython.cast(mpfr_prec_t, self.precision))
+            mpfr_set(
+                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
+                _array[i], MPFR_RNDN)
             mpfr_clear(_array[i])
         return np.array(res)
 
-    def k_rational_approx_data(self, cutoff, Delta_1_2=0, Delta_3_4=0, is_correlator_multiple=False, approximate_poles=True):
-        return k_rational_approx_data(self, cutoff, Delta_1_2, Delta_3_4, is_correlator_multiple, approximate_poles)
+    def k_rational_approx_data(self, cutoff, Delta_1_2=0, Delta_3_4=0,
+                               is_correlator_multiple=False,
+                               approximate_poles=True):
+        return k_rational_approx_data(
+            self, cutoff, Delta_1_2, Delta_3_4,
+            is_correlator_multiple, approximate_poles)
 
-    def rational_approx_data(self, cutoff, ell, Delta_1_2=0, Delta_3_4=0, is_correlator_multiple=True, approximate_poles=True):
-        return g_rational_approx_data_two_d(self, cutoff, ell, Delta_1_2, Delta_3_4, is_correlator_multiple, approximate_poles)
+    def rational_approx_data(self, cutoff, ell, Delta_1_2=0, Delta_3_4=0,
+                             is_correlator_multiple=True,
+                             approximate_poles=True):
+        return g_rational_approx_data_two_d(
+            self, cutoff, ell, Delta_1_2, Delta_3_4,
+            is_correlator_multiple, approximate_poles)
 
 
 @cython.cclass
@@ -665,23 +742,33 @@ class scalar_cb_4d_context(scalar_cb_context_generic):
         scalar_cb_context_generic.__init__(self, Lambda, Prec, nMax, 1)
         self.k_context = scalar_cb_2d_context(Lambda + 1, Prec, nMax)
         self.epsilon = self.field(1)
-        self.zzbar_anti_symm_to_xy_matrix = zzbar_anti_symm_to_xy_matrix(Lambda, field=self.field)
+        self.zzbar_anti_symm_to_xy_matrix = zzbar_anti_symm_to_xy_matrix(
+            Lambda, field=self.field)
 
     def chiral_h_asymptotic(self, S):
         return self.k_context.chiral_h_asymptotic(S)
 
     @cython.locals(n=long)
     def chiral_h_times_rho_to_n(self, n, h, Delta_1_2=0, Delta_3_4=0):
-        return self.k_context.chiral_h_times_rho_to_n(n, h, Delta_1_2=Delta_1_2, Delta_3_4=Delta_3_4)
+        return self.k_context.chiral_h_times_rho_to_n(
+            n, h, Delta_1_2=Delta_1_2, Delta_3_4=Delta_3_4)
 
     def k_table(self, h, Delta_1_2, Delta_3_4):
         return self.k_context.k_table(h, Delta_1_2, Delta_3_4)
 
-    def k_rational_approx_data(self, cutoff, Delta_1_2=0, Delta_3_4=0, is_correlator_multiple=True, approximate_poles=True):
-        return self.k_context.k_rational_approx_data(cutoff, Delta_1_2, Delta_3_4, is_correlator_multiple, approximate_poles=approximate_poles)
+    def k_rational_approx_data(self, cutoff, Delta_1_2=0, Delta_3_4=0,
+                               is_correlator_multiple=True,
+                               approximate_poles=True):
+        return self.k_context.k_rational_approx_data(
+            cutoff, Delta_1_2, Delta_3_4,
+            is_correlator_multiple, approximate_poles=approximate_poles)
 
-    def rational_approx_data(self, cutoff, ell, Delta_1_2=0, Delta_3_4=0, is_correlator_multiple=True, approximate_poles=True):
-        return g_rational_approx_data_four_d(self, cutoff, ell, Delta_1_2, Delta_3_4, is_correlator_multiple, approximate_poles)
+    def rational_approx_data(self, cutoff, ell, Delta_1_2=0, Delta_3_4=0,
+                             is_correlator_multiple=True,
+                             approximate_poles=True):
+        return g_rational_approx_data_four_d(
+            self, cutoff, ell, Delta_1_2, Delta_3_4,
+            is_correlator_multiple, approximate_poles)
 
 
 class g_rational_approx_data_four_d(object):

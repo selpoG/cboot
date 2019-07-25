@@ -4,7 +4,7 @@ import re
 import sys
 from subprocess import Popen
 
-import sage.cboot as cb
+import sage.cboot.scalar as cbs
 
 if sys.version_info.major == 2:
     from future_builtins import ascii, filter, hex, map, oct, zip
@@ -13,7 +13,7 @@ if sys.version_info.major == 2:
 else:
     from subprocess import DEVNULL
 
-context = cb.context_for_scalar(epsilon=0.5, Lambda=13)
+context = cbs.context_for_scalar(epsilon=0.5, Lambda=13)
 lmax = 25
 nu_max = 12
 cbs = dict()

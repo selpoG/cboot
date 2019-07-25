@@ -6,7 +6,7 @@ from subprocess import Popen
 
 from sage.misc.cachefunc import cached_function
 
-import sage.cboot as cb
+import sage.cboot.scalar as cbs
 
 if sys.version_info.major == 2:
     from future_builtins import ascii, filter, hex, map, oct, zip
@@ -19,7 +19,7 @@ sdpb = "sdpb"
 sdpbparams = ["--findPrimalFeasible",
               "--findDualFeasible", "--noFinalCheckpoint"]
 
-context = cb.context_for_scalar(epsilon=0.5, Lambda=11)
+context = cbs.context_for_scalar(epsilon=0.5, Lambda=11)
 lmax = 20
 nu_max = 8
 

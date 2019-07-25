@@ -1,3 +1,5 @@
+import cython
+
 from sage.libs.mpfr cimport mpfr_t, mpfr_prec_t
 from sage.rings.real_mpfr cimport RealField_class, RealNumber
 
@@ -23,6 +25,9 @@ cdef extern from "sage/cboot/context_variables.h":
     cb_context context_construct(long nMax, mpfr_prec_t prec, int Lambda)
     void clear_cb_context(cb_context context)
 
+@cython.locals(result=cython.pointer(mpfr_t))
+cdef mpfr_t* pole_integral_c(x_power_max, base, pole_position, order_of_pole, mpfr_prec_t prec)
+
 cdef class cb_universal_context(object):
     cdef cb_context c_context
     cdef public mpfr_prec_t precision
@@ -31,7 +36,7 @@ cdef class cb_universal_context(object):
     cdef public object Delta
     cdef public int Lambda
     cdef public RealNumber rho
-    cdef public long maxExpansionOrder
+    cdef public int maxExpansionOrder
     cdef public object polynomial_vector_shift
     cdef public object polynomial_vector_evaluate
     cdef public object convert_to_polynomial_vector
@@ -42,6 +47,8 @@ cdef class cb_universal_context(object):
     cdef public object rho_to_delta
     cdef public object null_ftype
     cdef public object null_htype
+    @cython.locals(temp1=mpfr_t)
+    cpdef pochhammer(self, x, unsigned long n)
 
 cdef class damped_rational(object):
     cdef public object __poles

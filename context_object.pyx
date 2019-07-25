@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import copy
+import cython
 import re
 import sys
 from collections import Counter
@@ -67,36 +68,41 @@ def z_zbar_derivative_to_x_y_derivative_Matrix(Lambda, field=RealField(400)):
     return result
 
 
-cdef class cb_universal_context(object):
+@cython.cclass
+class cb_universal_context(object):
     """
     Class to store a bunch of frequently used datum, like
     precision, cutoff parameter Lambda, and the matrix representing
     the change variables, e.g. {z, z_bar} -> (x, y) and r -> x.
     """
 
-    def __cinit__(self, int Lambda, mpfr_prec_t Prec, long nMax, float epsilon=0.0):
+    @cython.locals(Lambda=cython.int, Prec=mpfr_prec_t, nMax=cython.int)
+    def __cinit__(self, Lambda, Prec, nMax, epsilon=0.0):
         # argument epsilon is not used, but it is needed (why?)
-        self.c_context = <cb_context>context_construct(nMax, Prec, Lambda)
-        self.precision = <mpfr_prec_t>Prec
-        self.field = <RealField_class>RealField(Prec)
+        self.c_context = cython.cast(cb_context, context_construct(nMax, Prec, Lambda))
+        self.precision = cython.cast(mpfr_prec_t, Prec)
+        self.field = cython.cast(RealField_class, RealField(Prec))
         self.Delta_Field = self.field[str('Delta')]  # type: sage.rings.polynomial.polynomial_ring.PolynomialRing_field_with_category
         self.Delta = self.Delta_Field(str('Delta'))  # type: sage.rings.polynomial.polynomial_real_mpfr_dense.PolynomialRealDense
         self.Lambda = Lambda
         self.maxExpansionOrder = nMax
         self.rho_to_z_matrix = np.ndarray((Lambda + 1, Lambda + 1), dtype='O')
-        self.polynomial_vector_evaluate = np.vectorize(lambda x, value: self.Delta_Field(x)(value)) # type: Function[[np.ndarray, RealNumber], np.ndarray]
 
         for i in range(Lambda + 1):
             for j in range(Lambda + 1):
-                r = <RealNumber>(<RealField_class>self.field)._new()
+                r = cython.cast(RealNumber, cython.cast(RealField_class, self.field)._new())
                 r._parent = self.field
-                mpfr_init2(r.value, <mpfr_prec_t>Prec)
-                mpfr_set(r.value, <mpfr_t>self.c_context.rho_to_z_matrix[i * (Lambda + 1) + j], MPFR_RNDN)
+                mpfr_init2(r.value, cython.cast(mpfr_prec_t, Prec))
+                mpfr_set(r.value, cython.cast(mpfr_t, self.c_context.rho_to_z_matrix[i * (Lambda + 1) + j]), MPFR_RNDN)
                 self.rho_to_z_matrix[i][j] = r
 
-    def __init__(self, int Lambda, mpfr_prec_t Prec, long nMax):
-        # type polynomial_vector_shift: np.vectorize()
-        self.polynomial_vector_shift = np.vectorize(lambda x, shift: self.Delta_Field(x)(self.Delta + shift))
+    def __deallocate__(self):
+        clear_cb_context(cython.cast(cb_context, cython.cast(cb_universal_context, self).c_context))
+
+    @cython.locals(Lambda=cython.int, Prec=mpfr_prec_t, nMax=cython.int)
+    def __init__(self, Lambda, Prec, nMax):
+        self.polynomial_vector_evaluate = np.vectorize(lambda x, value: self.Delta_Field(x)(value)) # type: Function[[np.ndarray, RealNumber], np.ndarray]
+        self.polynomial_vector_shift = np.vectorize(lambda x, shift: self.Delta_Field(x)(self.Delta + shift)) # type: Function[[np.ndarray, RealNumber], np.ndarray]
         self.rho = 3 - 2 * self.field(2).sqrt()  # 3 - 2 sqrt(2)
 
         self.zzbar_to_xy_marix = z_zbar_derivative_to_x_y_derivative_Matrix(self.Lambda, self.field)
@@ -128,9 +134,6 @@ cdef class cb_universal_context(object):
 
     def __repr__(self):
         return "Conformal bootstrap context with Lambda = {0}, precision = {1}, nMax = {2}".format(self.Lambda, self.precision, self.maxExpansionOrder)
-
-    def __deallocate__(self):
-        clear_cb_context(<cb_context>(<cb_universal_context>self).c_context)
 
     def identity_vector(self):
         res = np.concatenate([self.null_ftype, self.null_htype])
@@ -192,17 +195,18 @@ cdef class cb_universal_context(object):
     def prefactor_numerator(self, pref, array):
         return prefactor_numerator(pref, array, self)
 
-    def pochhammer(self, x, unsigned long n):
+    @cython.ccall
+    @cython.locals(n="unsigned long", temp1=mpfr_t)
+    def pochhammer(self, x, n):
         x_c = self.field(x)
-        cdef mpfr_t temp1
         mpfr_init2(temp1, self.precision)
-        result = <RealNumber>(<RealField_class>self.field)._new()
-        (<RealNumber>result)._parent = self.field
-        mpfr_init2(<mpfr_t>(<RealNumber> result).value, self.precision)
-        mpfr_set_ui(<mpfr_t>(<RealNumber> result).value, 1, MPFR_RNDN)
+        result = cython.cast(RealNumber, cython.cast(RealField_class, self.field)._new())
+        cython.cast(RealNumber, result)._parent = self.field
+        mpfr_init2(cython.cast(mpfr_t, cython.cast(RealNumber, result).value), self.precision)
+        mpfr_set_ui(cython.cast(mpfr_t, cython.cast(RealNumber, result).value), 1, MPFR_RNDN)
         for j in range(n):
-            mpfr_add_ui(temp1, <mpfr_t>(<RealNumber>x_c).value, j, MPFR_RNDN)
-            mpfr_mul(<mpfr_t>(<RealNumber>result).value, <mpfr_t>(<RealNumber>result).value, temp1, MPFR_RNDN)
+            mpfr_add_ui(temp1, cython.cast(mpfr_t, cython.cast(RealNumber, x_c).value), j, MPFR_RNDN)
+            mpfr_mul(cython.cast(mpfr_t, cython.cast(RealNumber, result).value), cython.cast(mpfr_t, cython.cast(RealNumber, result).value), temp1, MPFR_RNDN)
         mpfr_clear(temp1)
         return result
 
@@ -340,7 +344,10 @@ cdef class cb_universal_context(object):
             return np.dot(x, y)
 
 
-cdef mpfr_t* pole_integral_c(x_power_max, base, pole_position, order_of_pole, mpfr_prec_t prec):
+@cython.cfunc
+@cython.returns("mpfr_t*")
+@cython.locals(prec=mpfr_prec_t)
+def pole_integral_c(x_power_max, base, pole_position, order_of_pole, prec):
     a = RealField(2 * prec)(pole_position)
     b = RealField(2 * prec)(base)
     if a < 0:
@@ -357,20 +364,30 @@ cdef mpfr_t* pole_integral_c(x_power_max, base, pole_position, order_of_pole, mp
     a = field(pole_position)
     b = field(base)
 
-    cdef mpfr_t* result;
     if order_of_pole == 1:
-        result = simple_pole_case_c(<long> x_power_max, <mpfr_t>(<RealNumber>b).value, <mpfr_t>(<RealNumber> a).value, <mpfr_t>(<RealNumber> incomplete_gamma).value, prec)
+        result = simple_pole_case_c(
+            cython.cast(long, x_power_max),
+            cython.cast(mpfr_t, cython.cast(RealNumber, b).value),
+            cython.cast(mpfr_t, cython.cast(RealNumber, a).value),
+            cython.cast(mpfr_t, cython.cast(RealNumber, incomplete_gamma).value),
+            prec)
     elif order_of_pole == 2:
-        result = double_pole_case_c(<long> x_power_max, <mpfr_t>(<RealNumber>b).value, <mpfr_t>(<RealNumber> a).value, <mpfr_t>(<RealNumber> incomplete_gamma).value, prec)
+        result = double_pole_case_c(
+            cython.cast(long, x_power_max),
+            cython.cast(mpfr_t, cython.cast(RealNumber, b).value),
+            cython.cast(mpfr_t, cython.cast(RealNumber, a).value),
+            cython.cast(mpfr_t, cython.cast(RealNumber, incomplete_gamma).value),
+            prec)
     return result
 
-
-cpdef prefactor_integral(pole_data, base, int x_power, prec, c=1):
+@cython.ccall
+@cython.locals(x_power=cython.int, n=cython.int, number_of_factors=cython.int, count=cython.int, pole_data_to_c="mpfr_t*", is_double="int*", temp1=mpfr_t, temp2=mpfr_t, temp_mpfrs="mpfr_t*")
+def prefactor_integral(pole_data, base, x_power, prec, c=1):
     field = RealField(prec)
-    cdef int n = len(pole_data)
-    cdef int number_of_factors = sum([x[1] for x in pole_data])
+    n = len(pole_data)
+    number_of_factors = sum([x[1] for x in pole_data])
 
-    cdef int count = 0
+    count = 0
     index_list = []
     for i, pole in enumerate(pole_data):
         if field(pole[0]) > 0:
@@ -389,16 +406,16 @@ cpdef prefactor_integral(pole_data, base, int x_power, prec, c=1):
         for i in range (1, x_power + 1):
             result[i] = result[i - 1] * minus_ln_b * i
         return result
-    cdef mpfr_t* pole_data_to_c = <mpfr_t*> malloc(sizeof(mpfr_t) * len(pole_data))
+    pole_data_to_c = cython.cast("mpfr_t*", malloc(cython.sizeof(mpfr_t) * len(pole_data)))
     if pole_data_to_c == NULL:
         raise NotImplementedError
-    cdef int * is_double = <int*> malloc(sizeof(int) * len(pole_data))
+    is_double = cython.cast("int*", malloc(cython.sizeof(int) * len(pole_data)))
 
     base_c = field(base);
     for i in range(n):
         r = field(pole_data[i][0])
         mpfr_init2(pole_data_to_c[i], prec)
-        mpfr_set(pole_data_to_c[i], <mpfr_t>(<RealNumber>r).value, MPFR_RNDN)
+        mpfr_set(pole_data_to_c[i], cython.cast(mpfr_t, cython.cast(RealNumber, r).value), MPFR_RNDN)
         if pole_data[i][1] == 2:
             is_double[i] = 1
         else:
@@ -411,25 +428,21 @@ cpdef prefactor_integral(pole_data, base, int x_power, prec, c=1):
     free(pole_data_to_c)
     free(is_double)
 
-    cdef mpfr_t temp1
     mpfr_init2(temp1, prec);
-    cdef mpfr_t temp2
     mpfr_init2(temp2, prec);
     result = np.ndarray(x_power + 1, dtype='O')
     for i in range(x_power + 1):
-        result[i] = <RealNumber>(<RealField_class>field)._new()
-        mpfr_init2(<mpfr_t>(<RealNumber> result[i]).value, prec)
-        mpfr_set_zero(<mpfr_t>(<RealNumber> result[i]).value, 1)
-        (<RealNumber> result[i])._parent = field
-
-    cdef mpfr_t* temp_mpfrs
+        result[i] = cython.cast(RealNumber, cython.cast(RealField_class, field)._new())
+        mpfr_init2(cython.cast(mpfr_t, cython.cast(RealNumber, result[i]).value), prec)
+        mpfr_set_zero(cython.cast(mpfr_t, cython.cast(RealNumber, result[i]).value), 1)
+        cython.cast(RealNumber, result[i])._parent = field
 
     for i in range(number_of_factors):
         temp_mpfrs = pole_integral_c(x_power, base, pole_data[index_list[i][0]][0], index_list[i][1], prec)
 
         for j in range(x_power + 1):
             mpfr_mul(temp1, decompose_coeffs[i], temp_mpfrs[j], MPFR_RNDN)
-            mpfr_add(<mpfr_t>(<RealNumber> result[j]).value, <mpfr_t>(<RealNumber> result[j]).value, temp1, MPFR_RNDN)
+            mpfr_add(cython.cast(mpfr_t, cython.cast(RealNumber, result[j]).value), cython.cast(mpfr_t, cython.cast(RealNumber, result[j]).value), temp1, MPFR_RNDN)
             mpfr_clear(temp_mpfrs[j])
         free(temp_mpfrs)
 
@@ -439,7 +452,9 @@ cpdef prefactor_integral(pole_data, base, int x_power, prec, c=1):
     return RealField(prec)(c) * result
 
 
-cpdef anti_band_cholesky_inverse(v, n_order_max, prec):
+@cython.ccall
+@cython.locals(anti_band_input="mpfr_t*", anti_band_mat="mpfr_t*", cholesky_decomposed="mpfr_t*", inversed="mpfr_t*")
+def anti_band_cholesky_inverse(v, n_order_max, prec):
     field = RealField(prec)
     n_max = int(n_order_max)
     if not isinstance(n_max, int):
@@ -451,21 +466,21 @@ cpdef anti_band_cholesky_inverse(v, n_order_max, prec):
         print("expected n_max to be positive integer...")
         raise TypeError
 
-    cdef mpfr_t* anti_band_input = <mpfr_t*> malloc(sizeof(mpfr_t) * len(v))
+    anti_band_input = cython.cast("mpfr_t*", malloc(cython.sizeof(mpfr_t) * len(v)))
     for i, val in enumerate(v):
         r = field(val)
         mpfr_init2(anti_band_input[i], prec)
-        mpfr_set(anti_band_input[i], <mpfr_t>(<RealNumber>r).value, MPFR_RNDN)
-    cdef mpfr_t* anti_band_mat = form_anti_band(anti_band_input, <int>(n_max + 1), int(prec))
+        mpfr_set(anti_band_input[i], cython.cast(mpfr_t, cython.cast(RealNumber, r).value), MPFR_RNDN)
+    anti_band_mat = form_anti_band(anti_band_input, cython.cast(int, n_max + 1), int(prec))
     for i, _ in enumerate(v):
         mpfr_clear(anti_band_input[i])
     free(anti_band_input)
-    cdef mpfr_t* cholesky_decomposed = mpfr_cholesky(anti_band_mat, <int>(n_max + 1), int(prec))
+    cholesky_decomposed = mpfr_cholesky(anti_band_mat, cython.cast(int, n_max + 1), int(prec))
     for i in range((n_max - 1) ** 2):
         mpfr_clear(anti_band_mat[i])
     free (anti_band_mat)
 
-    cdef mpfr_t* inversed = mpfr_triangular_inverse(cholesky_decomposed, <int>(n_max + 1), int(prec))
+    inversed = mpfr_triangular_inverse(cholesky_decomposed, cython.cast(int, n_max + 1), int(prec))
     for i in range((n_max + 1) ** 2):
         mpfr_clear(cholesky_decomposed[i])
     free(cholesky_decomposed)
@@ -473,10 +488,10 @@ cpdef anti_band_cholesky_inverse(v, n_order_max, prec):
     result = np.ndarray((n_max + 1, n_max + 1), dtype='O')
     for i in range(n_max + 1):
         for j in range(n_max + 1):
-            result[i][j] = <RealNumber>(<RealField_class>field)._new()
-            mpfr_init2(<mpfr_t>(<RealNumber>result[i][j]).value, prec)
-            mpfr_set(<mpfr_t>(<RealNumber>result[i][j]).value, inversed[i * (n_max + 1) + j], MPFR_RNDN)
-            (<RealNumber>result[i][j])._parent = field
+            result[i][j] = cython.cast(RealNumber, cython.cast(RealField_class, field)._new())
+            mpfr_init2(cython.cast(mpfr_t, cython.cast(RealNumber, result[i][j]).value), prec)
+            mpfr_set(cython.cast(mpfr_t, cython.cast(RealNumber, result[i][j]).value), inversed[i * (n_max + 1) + j], MPFR_RNDN)
+            cython.cast(RealNumber, result[i][j])._parent = field
             mpfr_clear(inversed[i * (n_max + 1) + j])
 
     free(inversed)
@@ -588,18 +603,21 @@ def format_poleinfo(poles, context=None):
     raise TypeError("unreadable initialization for poles")
 
 
-cdef class damped_rational(object):
+@cython.cclass
+class damped_rational(object):
     '''
     represents a rational function f(Delta) = pref_constant * (base ** Delta) / (polynomial of Delta),
     where (polynomial of Delta) = \\prod_{i \\in poles} (Delta - i) ** poles[i]
     '''
 
-    def __cinit__(self, poles, base, c, cb_universal_context context):
+    @cython.locals(context=cb_universal_context)
+    def __cinit__(self, poles, base, c, context):
         self.__base = context.field(base)  # type: RealNumber
         self.__pref_constant = context.field(c)  # type: RealNumber
         self.__context = context  # type: RealField_class
 
-    def __init__(self, poles, base, c, cb_universal_context context):
+    @cython.locals(context=cb_universal_context)
+    def __init__(self, poles, base, c, context):
         self.__poles = format_poleinfo(poles, context)  # type: Dict[RealNumber, int]
 
     # return new rational g(Delta), where f(Delta + shift) = g(Delta)
@@ -755,12 +773,17 @@ cdef class damped_rational(object):
             return output
         return "{0}*({1})**Delta / ({2})".format(repr(self.__pref_constant), repr(self.__base), "*".join(pole_str(x) for x in self.__poles))
 
-cdef class positive_matrix_with_prefactor(object):
-    def __cinit__(self, damped_rational prefactor, matrix, cb_universal_context context):
+
+@cython.cclass
+class positive_matrix_with_prefactor(object):
+
+    @cython.locals(prefactor=damped_rational, context=cb_universal_context)
+    def __cinit__(self, prefactor, matrix, context):
         self.prefactor = prefactor
         self.context = context
 
-    def __init__(self, damped_rational prefactor, matrix, context):
+    @cython.locals(prefactor=damped_rational)
+    def __init__(self, prefactor, matrix, context):
         self.matrix = matrix
 
     def shift(self, x):
@@ -807,7 +830,9 @@ cdef class positive_matrix_with_prefactor(object):
         return prefactor_numerator(self.prefactor, new_b, self.context)
 
 
-cdef class prefactor_numerator(positive_matrix_with_prefactor):
+@cython.cclass
+class prefactor_numerator(positive_matrix_with_prefactor):
+
     def add_poles(self, poles):
         new_pref = self.prefactor.add_poles(poles)
         return prefactor_numerator(new_pref, self.matrix, self.context)

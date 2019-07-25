@@ -6,7 +6,9 @@ from collections import Counter
 from functools import reduce
 
 import numpy as np
-from sage.all import Integer, matrix, ZZ
+from sage.matrix.constructor import matrix
+from sage.rings.integer import Integer
+from sage.rings.integer_ring import ZZ
 from sage.rings.real_mpfr import RealField
 
 from sage.cboot.context_object import (
@@ -22,7 +24,6 @@ from sage.rings.real_mpfr cimport RealField_class, RealNumber
 from sage.libs.mpfr cimport (
     mpfr_clear, mpfr_init2, mpfr_prec_t,
     MPFR_RNDN, mpfr_set, mpfr_t, mpfr_zero_p)
-# from sage.cboot.context_object cimport cb_context, cb_universal_context
 
 
 @cython.cfunc

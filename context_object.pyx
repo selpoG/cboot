@@ -8,8 +8,12 @@ from collections import Counter
 from functools import reduce
 
 import numpy as np
-from sage.all import Integer, is_square, log, Matrix, sqrt
-from sage.functions.gamma import gamma
+from sage.arith.misc import is_square
+from sage.functions.all import gamma
+from sage.functions.log import log
+from sage.functions.other import sqrt
+from sage.matrix.constructor import matrix
+from sage.rings.integer import Integer
 from sage.rings.real_mpfr import RealField, RealNumber, RR
 
 if sys.version_info.major == 2:
@@ -22,6 +26,7 @@ from sage.libs.mpfr cimport (
     mpfr_add, mpfr_add_ui, mpfr_set_ui, MPFR_RNDN, mpfr_set_zero)
 from sage.rings.real_mpfr cimport RealField_class
 
+
 def is_integer(x):
     try:
         Integer(x)
@@ -29,6 +34,7 @@ def is_integer(x):
         return False
     else:
         return True
+
 
 def get_dimG(Lambda):
     # type: int -> int
@@ -47,12 +53,13 @@ def z_zbar_derivative_to_x_y_derivative_Matrix(Lambda, field=RealField(400)):
     Assuming the derivatives to be ordered as
     f, D_z f, D_z
     """
-    assert isinstance(field, RealField_class), "field must be instance of RealField_class, but is {0}.".format(type(field))
     q = field[str('x')]
     dimG = get_dimG(Lambda)
     result = np.full((dimG, dimG), field(0))
+
     def set_ij_elements(x, a, b, i, j):
         result[(Lambda + 2 - a) * a + b][(Lambda + 2 - i) * i + j] = x
+
     qplus = q(str('x + 1'))
     qminus = q(str('x - 1'))
     for i in range(Lambda // 2 + 1):
@@ -79,41 +86,57 @@ class cb_universal_context(object):
     @cython.locals(Lambda=cython.int, Prec=mpfr_prec_t, nMax=cython.int)
     def __cinit__(self, Lambda, Prec, nMax, epsilon=0.0):
         # argument epsilon is not used, but it is needed (why?)
-        self.c_context = cython.cast(cb_context, context_construct(nMax, Prec, Lambda))
+        self.c_context = cython.cast(
+            cb_context, context_construct(nMax, Prec, Lambda))
         self.precision = cython.cast(mpfr_prec_t, Prec)
         self.field = cython.cast(RealField_class, RealField(Prec))
-        self.Delta_Field = self.field[str('Delta')]  # type: sage.rings.polynomial.polynomial_ring.PolynomialRing_field_with_category
-        self.Delta = self.Delta_Field(str('Delta'))  # type: sage.rings.polynomial.polynomial_real_mpfr_dense.PolynomialRealDense
+        self.Delta_Field = self.field[str('Delta')]
+        self.Delta = self.Delta_Field(str('Delta'))
         self.Lambda = Lambda
         self.maxExpansionOrder = nMax
         self.rho_to_z_matrix = np.ndarray((Lambda + 1, Lambda + 1), dtype='O')
 
         for i in range(Lambda + 1):
             for j in range(Lambda + 1):
-                r = cython.cast(RealNumber, cython.cast(RealField_class, self.field)._new())
+                r = cython.cast(
+                    RealNumber, cython.cast(RealField_class, self.field)._new())
                 r._parent = self.field
                 mpfr_init2(r.value, cython.cast(mpfr_prec_t, Prec))
-                mpfr_set(r.value, cython.cast(mpfr_t, self.c_context.rho_to_z_matrix[i * (Lambda + 1) + j]), MPFR_RNDN)
+                mpfr_set(
+                    r.value,
+                    cython.cast(
+                        mpfr_t,
+                        self.c_context.rho_to_z_matrix[i * (Lambda + 1) + j]),
+                    MPFR_RNDN)
                 self.rho_to_z_matrix[i][j] = r
 
     def __deallocate__(self):
-        clear_cb_context(cython.cast(cb_context, cython.cast(cb_universal_context, self).c_context))
+        clear_cb_context(
+            cython.cast(
+                cb_context,
+                cython.cast(cb_universal_context, self).c_context))
 
     @cython.locals(Lambda=cython.int, Prec=mpfr_prec_t, nMax=cython.int)
     def __init__(self, Lambda, Prec, nMax):
-        self.polynomial_vector_evaluate = np.vectorize(lambda x, value: self.Delta_Field(x)(value)) # type: Function[[np.ndarray, RealNumber], np.ndarray]
-        self.polynomial_vector_shift = np.vectorize(lambda x, shift: self.Delta_Field(x)(self.Delta + shift)) # type: Function[[np.ndarray, RealNumber], np.ndarray]
+        # type: Function[[np.ndarray, RealNumber], np.ndarray]
+        self.polynomial_vector_evaluate = np.vectorize(
+            lambda x, value: self.Delta_Field(x)(value))
+        # type: Function[[np.ndarray, RealNumber], np.ndarray]
+        self.polynomial_vector_shift = np.vectorize(
+            lambda x, shift: self.Delta_Field(x)(self.Delta + shift))
         self.rho = 3 - 2 * self.field(2).sqrt()  # 3 - 2 sqrt(2)
 
-        self.zzbar_to_xy_marix = z_zbar_derivative_to_x_y_derivative_Matrix(self.Lambda, self.field)
+        self.zzbar_to_xy_marix = z_zbar_derivative_to_x_y_derivative_Matrix(
+            self.Lambda, self.field)
         self.index_list = reduce(
             lambda x, y: x + y,
             ([np.array([i, j]) for j in range(self.Lambda + 1 - 2 * i)]
-            for i in range(self.Lambda // 2 + 1)))
+             for i in range(self.Lambda // 2 + 1)))
         self.rho_to_delta = np.ndarray(self.Lambda + 1, dtype='O')
         self.rho_to_delta[0] = self.Delta_Field(1)
         for i in range(1, self.Lambda + 1):
-            self.rho_to_delta[i] = self.rho_to_delta[i - 1] * (self.Delta + 1 - i) / (self.rho * i)
+            self.rho_to_delta[i] = self.rho_to_delta[i - 1] * \
+                (self.Delta + 1 - i) / (self.rho * i)
         self.rho_to_delta = self.rho_to_z_matrix.dot(self.rho_to_delta)
         self.null_ftype = np.full(self.dim_f(), self.field(0))
         self.null_htype = np.full(self.dim_h(), self.field(0))
@@ -148,11 +171,16 @@ class cb_universal_context(object):
         local_table = [d.parent(1)]
         local_res = []
         for i in range(1, self.Lambda + 1):
-            local_table.append(local_table[-1] * (d.parent(-2) * (d - d.parent(len(local_table) - 1))) / d.parent(len(local_table)))
+            local_table.append(
+                local_table[-1] *
+                (d.parent(-2) * (d - d.parent(len(local_table) - 1))) /
+                d.parent(len(local_table)))
 
         for i in range(self.Lambda + 1):
             for j in range(i, self.Lambda + 1 - i):
-                local_res.append((local_table[i] * local_table[j] + local_table[j] * local_table[i]) / 2)
+                local_res.append(
+                    (local_table[i] * local_table[j] +
+                     local_table[j] * local_table[i]) / 2)
         return self.zzbar_to_xy_marix.dot(np.array(local_res))
 
     def __F_matrix_impl(self, d, parity):
@@ -163,11 +191,15 @@ class cb_universal_context(object):
         F^{+}_{d, \\Delta, l}(x, y) is computed by
         F_minus = F_minus_matrix(d).dot(gBlock(ell, Delta, S, P))
         """
-        aligned_index = lambda x: (self.Lambda + 2 - x[0]) * x[0] + x[1]
+        def aligned_index(x):
+            return (self.Lambda + 2 - x[0]) * x[0] + x[1]
+
         local_v = self.__v_to_d(d)
         return ((self.field(1) / 4) ** d) * np.array([
             np.array([
-                local_v[aligned_index(i - m)] if (i - m)[0] >= 0 and (i - m)[1] >= 0 else d.parent(0)
+                local_v[aligned_index(i - m)]
+                if (i - m)[0] >= 0 and (i - m)[1] >= 0
+                else d.parent(0)
                 for m in self.index_list])
             for i in self.index_list if i[1] % 2 == parity])
 
@@ -200,13 +232,24 @@ class cb_universal_context(object):
     def pochhammer(self, x, n):
         x_c = self.field(x)
         mpfr_init2(temp1, self.precision)
-        result = cython.cast(RealNumber, cython.cast(RealField_class, self.field)._new())
+        result = cython.cast(
+            RealNumber, cython.cast(RealField_class, self.field)._new())
         cython.cast(RealNumber, result)._parent = self.field
-        mpfr_init2(cython.cast(mpfr_t, cython.cast(RealNumber, result).value), self.precision)
-        mpfr_set_ui(cython.cast(mpfr_t, cython.cast(RealNumber, result).value), 1, MPFR_RNDN)
+        mpfr_init2(
+            cython.cast(mpfr_t, cython.cast(RealNumber, result).value),
+            self.precision)
+        mpfr_set_ui(
+            cython.cast(mpfr_t, cython.cast(RealNumber, result).value),
+            1, MPFR_RNDN)
         for j in range(n):
-            mpfr_add_ui(temp1, cython.cast(mpfr_t, cython.cast(RealNumber, x_c).value), j, MPFR_RNDN)
-            mpfr_mul(cython.cast(mpfr_t, cython.cast(RealNumber, result).value), cython.cast(mpfr_t, cython.cast(RealNumber, result).value), temp1, MPFR_RNDN)
+            mpfr_add_ui(
+                temp1,
+                cython.cast(mpfr_t, cython.cast(RealNumber, x_c).value),
+                j, MPFR_RNDN)
+            mpfr_mul(
+                cython.cast(mpfr_t, cython.cast(RealNumber, result).value),
+                cython.cast(mpfr_t, cython.cast(RealNumber, result).value),
+                temp1, MPFR_RNDN)
         mpfr_clear(temp1)
         return result
 
@@ -243,18 +286,21 @@ class cb_universal_context(object):
                     if n not in dims:
                         dims[n] = len_x
                     elif dims[n] != len_x:
-                        raise RuntimeError("Input has inconsistent dimensions.")
-        res_pref_poles = damped_rational.poles_max(pn.prefactor for pn in pns)
-        res_pref = self.damped_rational(res_pref_poles)
-        for ind, pn in zip(pnindices, pns):
-            bodies[ind] =  res_pref.div(pn.prefactor).denominator(self.Delta) * pn.matrix
+                        raise RuntimeError(
+                            "Input has inconsistent dimensions.")
+        respref_poles = damped_rational.poles_max(pn.prefactor for pn in pns)
+        respref = self.damped_rational(respref_poles)
+        for i, pn in zip(pnindices, pns):
+            bodies[i] = respref.div(pn.prefactor).denom(self.Delta) * pn.matrix
         res = np.ndarray((nrow, nrow, sum(dims[x] for x in dims)), dtype='O')
         for i in range(nrow):
             for j in range(nrow):
-                v = tuple(bodies[(n, i, j)].reshape((dims[n], )) for n in range(nBlock))
+                v = tuple(
+                    bodies[(n, i, j)].reshape((dims[n],))
+                    for n in range(nBlock))
                 vv = np.concatenate(v)
                 res[i, j] = vv
-        return prefactor_numerator(res_pref, res, self)
+        return prefactor_numerator(respref, res, self)
 
     def sumrule_to_SDP(self, normalization, objective, svs):
         # svs must be a list of lists of matrices
@@ -269,33 +315,37 @@ class cb_universal_context(object):
                 raise RuntimeError("Sum rule vector has in equal dimensions!")
             psv = []  # type: List[List[List[prefactor_numerator]]]
             for n, component in enumerate(sv):
-                # pcomponent: List[List[prefactor_numerator]]
+                # pmat: List[List[prefactor_numerator]]
                 if not isinstance(component, list):
-                    pcomponent = [[component]]
+                    pmat = [[component]]
                 else:
-                    pcomponent = component
-                assert len(pcomponent) == len(pcomponent[0]), "Each component must be a square matrix."
-                for i, row in enumerate(pcomponent):
+                    pmat = component
+                assert len(pmat) == len(
+                    pmat[0]), "Each component must be a square matrix."
+                for i, row in enumerate(pmat):
                     for j, x in enumerate(row):
                         if isinstance(x, prefactor_numerator):
                             if n not in dims:
                                 dims[n] = x.matrix.shape[0]
                             elif dims[n] != x.matrix.shape[0]:
-                                raise RuntimeError("Found inconsistent dimension.")
+                                raise RuntimeError(
+                                    "Found inconsistent dimension.")
                         elif isinstance(x, np.ndarray):
-                            pcomponent[i][j] = self.vector_to_prefactor_numerator(x)
+                            pmat[i][j] = self.vector_to_prefactor_numerator(x)
                             if n not in dims:
                                 dims[n] = x.shape[0]
                             elif dims[n] != x.shape[0]:
-                                raise RuntimeError("Found inconsistent dimension.")
+                                raise RuntimeError(
+                                    "Found inconsistent dimension.")
                         else:
                             tbs[n].append((m, n, i, j))
-                psv.append(pcomponent)
+                psv.append(pmat)
             res.append(psv)
         if n_block > len(dims):
             raise RuntimeError("There exists a component zero for all")
         for k in dims:
-            if k not in tbs: continue
+            if k not in tbs:
+                continue
             for m, n, i, j in tbs[k]:
                 res[m][n][i][j] = dims[k]
         if isinstance(normalization, np.ndarray):
@@ -326,7 +376,8 @@ class cb_universal_context(object):
             obj = np.concatenate(obj_list)
         else:
             if not is_integer(objective) or Integer(objective) != 0:
-                raise NotImplementedError("Got unrecognizable input for objective")
+                raise NotImplementedError(
+                    "Got unrecognizable input for objective")
             obj = np.full(sum(dims[n] for n in dims), self(0), dtype='O')
         return self.SDP(norm, obj, [self.join(sv) for sv in res])
 
@@ -351,14 +402,15 @@ def pole_integral_c(x_power_max, base, pole_position, order_of_pole, prec):
     a = RealField(2 * prec)(pole_position)
     b = RealField(2 * prec)(base)
     if a < 0:
-        incomplete_gamma = b ** a * gamma(0, a * log(b))
+        igamma = b ** a * gamma(0, a * log(b))
     elif a == 0:
-        incomplete_gamma = RealField(prec)(prec)
+        igamma = RealField(prec)(prec)
     else:
         raise RuntimeError("A pole exists in the prefactor")
-    if not incomplete_gamma.is_real():
-        raise RuntimeError("Integral not real ... perhaps a mistake in pole data.")
-    incomplete_gamma = RealField(prec)(incomplete_gamma)
+    if not igamma.is_real():
+        raise RuntimeError(
+            "Integral not real ... perhaps a mistake in pole data.")
+    igamma = RealField(prec)(igamma)  # incomplete gamma
 
     field = RealField(prec)
     a = field(pole_position)
@@ -369,19 +421,23 @@ def pole_integral_c(x_power_max, base, pole_position, order_of_pole, prec):
             cython.cast(long, x_power_max),
             cython.cast(mpfr_t, cython.cast(RealNumber, b).value),
             cython.cast(mpfr_t, cython.cast(RealNumber, a).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, incomplete_gamma).value),
+            cython.cast(mpfr_t, cython.cast(RealNumber, igamma).value),
             prec)
     elif order_of_pole == 2:
         result = double_pole_case_c(
             cython.cast(long, x_power_max),
             cython.cast(mpfr_t, cython.cast(RealNumber, b).value),
             cython.cast(mpfr_t, cython.cast(RealNumber, a).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, incomplete_gamma).value),
+            cython.cast(mpfr_t, cython.cast(RealNumber, igamma).value),
             prec)
     return result
 
+
 @cython.ccall
-@cython.locals(x_power=cython.int, n=cython.int, number_of_factors=cython.int, count=cython.int, pole_data_to_c="mpfr_t*", is_double="int*", temp1=mpfr_t, temp2=mpfr_t, temp_mpfrs="mpfr_t*")
+@cython.locals(
+    x_power=cython.int, n=cython.int, number_of_factors=cython.int,
+    count=cython.int, pole_data_to_c="mpfr_t*", is_double="int*",
+    temp1=mpfr_t, temp2=mpfr_t, temp_mpfrs="mpfr_t*")
 def prefactor_integral(pole_data, base, x_power, prec, c=1):
     field = RealField(prec)
     n = len(pole_data)
@@ -391,7 +447,8 @@ def prefactor_integral(pole_data, base, x_power, prec, c=1):
     index_list = []
     for i, pole in enumerate(pole_data):
         if field(pole[0]) > 0:
-            raise NotImplementedError("There exists a pole on the integration contour of the prefactor!")
+            raise NotImplementedError(
+                "There exists a pole on the integration contour of the prefactor!")
         if pole[1] == 1:
             index_list.append([i, 1])
         elif pole[1] == 2:
@@ -403,24 +460,29 @@ def prefactor_integral(pole_data, base, x_power, prec, c=1):
         minus_ln_b = -1 / log(RealField(prec)(base))
         result = np.ndarray(x_power + 1, dtype='O')
         result[0] = minus_ln_b * RealField(prec)(c)
-        for i in range (1, x_power + 1):
+        for i in range(1, x_power + 1):
             result[i] = result[i - 1] * minus_ln_b * i
         return result
-    pole_data_to_c = cython.cast("mpfr_t*", malloc(cython.sizeof(mpfr_t) * len(pole_data)))
+    pole_data_to_c = cython.cast(
+        "mpfr_t*", malloc(cython.sizeof(mpfr_t) * len(pole_data)))
     if pole_data_to_c == NULL:
         raise NotImplementedError
-    is_double = cython.cast("int*", malloc(cython.sizeof(int) * len(pole_data)))
+    is_double = cython.cast(
+        "int*", malloc(cython.sizeof(int) * len(pole_data)))
 
-    base_c = field(base);
+    base_c = field(base)
     for i in range(n):
         r = field(pole_data[i][0])
         mpfr_init2(pole_data_to_c[i], prec)
-        mpfr_set(pole_data_to_c[i], cython.cast(mpfr_t, cython.cast(RealNumber, r).value), MPFR_RNDN)
+        mpfr_set(
+            pole_data_to_c[i],
+            cython.cast(mpfr_t, cython.cast(RealNumber, r).value), MPFR_RNDN)
         if pole_data[i][1] == 2:
             is_double[i] = 1
         else:
             is_double[i] = 0
-    decompose_coeffs = fast_partial_fraction_c(pole_data_to_c, is_double, n, prec)
+    decompose_coeffs = fast_partial_fraction_c(
+        pole_data_to_c, is_double, n, prec)
 
     for i, _ in enumerate(pole_data):
         mpfr_clear(pole_data_to_c[i])
@@ -428,21 +490,30 @@ def prefactor_integral(pole_data, base, x_power, prec, c=1):
     free(pole_data_to_c)
     free(is_double)
 
-    mpfr_init2(temp1, prec);
-    mpfr_init2(temp2, prec);
+    mpfr_init2(temp1, prec)
+    mpfr_init2(temp2, prec)
     result = np.ndarray(x_power + 1, dtype='O')
     for i in range(x_power + 1):
-        result[i] = cython.cast(RealNumber, cython.cast(RealField_class, field)._new())
-        mpfr_init2(cython.cast(mpfr_t, cython.cast(RealNumber, result[i]).value), prec)
-        mpfr_set_zero(cython.cast(mpfr_t, cython.cast(RealNumber, result[i]).value), 1)
+        result[i] = cython.cast(
+            RealNumber, cython.cast(RealField_class, field)._new())
+        mpfr_init2(
+            cython.cast(mpfr_t, cython.cast(RealNumber, result[i]).value), prec)
+        mpfr_set_zero(
+            cython.cast(mpfr_t, cython.cast(RealNumber, result[i]).value), 1)
         cython.cast(RealNumber, result[i])._parent = field
 
     for i in range(number_of_factors):
-        temp_mpfrs = pole_integral_c(x_power, base, pole_data[index_list[i][0]][0], index_list[i][1], prec)
+        temp_mpfrs = pole_integral_c(
+            x_power, base,
+            pole_data[index_list[i][0]][0], index_list[i][1], prec)
 
         for j in range(x_power + 1):
-            mpfr_mul(temp1, decompose_coeffs[i], temp_mpfrs[j], MPFR_RNDN)
-            mpfr_add(cython.cast(mpfr_t, cython.cast(RealNumber, result[j]).value), cython.cast(mpfr_t, cython.cast(RealNumber, result[j]).value), temp1, MPFR_RNDN)
+            mpfr_mul(
+                temp1, decompose_coeffs[i], temp_mpfrs[j], MPFR_RNDN)
+            mpfr_add(
+                cython.cast(mpfr_t, cython.cast(RealNumber, result[j]).value),
+                cython.cast(mpfr_t, cython.cast(RealNumber, result[j]).value),
+                temp1, MPFR_RNDN)
             mpfr_clear(temp_mpfrs[j])
         free(temp_mpfrs)
 
@@ -453,7 +524,9 @@ def prefactor_integral(pole_data, base, x_power, prec, c=1):
 
 
 @cython.ccall
-@cython.locals(anti_band_input="mpfr_t*", anti_band_mat="mpfr_t*", cholesky_decomposed="mpfr_t*", inversed="mpfr_t*")
+@cython.locals(
+    anti_band_input="mpfr_t*", anti_band_mat="mpfr_t*",
+    cholesky_decomposed="mpfr_t*", inversed="mpfr_t*")
 def anti_band_cholesky_inverse(v, n_order_max, prec):
     field = RealField(prec)
     n_max = int(n_order_max)
@@ -466,41 +539,54 @@ def anti_band_cholesky_inverse(v, n_order_max, prec):
         print("expected n_max to be positive integer...")
         raise TypeError
 
-    anti_band_input = cython.cast("mpfr_t*", malloc(cython.sizeof(mpfr_t) * len(v)))
+    anti_band_input = cython.cast(
+        "mpfr_t*", malloc(cython.sizeof(mpfr_t) * len(v)))
     for i, val in enumerate(v):
         r = field(val)
         mpfr_init2(anti_band_input[i], prec)
-        mpfr_set(anti_band_input[i], cython.cast(mpfr_t, cython.cast(RealNumber, r).value), MPFR_RNDN)
-    anti_band_mat = form_anti_band(anti_band_input, cython.cast(int, n_max + 1), int(prec))
+        mpfr_set(
+            anti_band_input[i],
+            cython.cast(mpfr_t, cython.cast(RealNumber, r).value),
+            MPFR_RNDN)
+    anti_band_mat = form_anti_band(
+        anti_band_input, cython.cast(int, n_max + 1), int(prec))
     for i, _ in enumerate(v):
         mpfr_clear(anti_band_input[i])
     free(anti_band_input)
-    cholesky_decomposed = mpfr_cholesky(anti_band_mat, cython.cast(int, n_max + 1), int(prec))
+    cholesky_decomposed = mpfr_cholesky(
+        anti_band_mat, cython.cast(int, n_max + 1), int(prec))
     for i in range((n_max - 1) ** 2):
         mpfr_clear(anti_band_mat[i])
-    free (anti_band_mat)
+    free(anti_band_mat)
 
-    inversed = mpfr_triangular_inverse(cholesky_decomposed, cython.cast(int, n_max + 1), int(prec))
+    inversed = mpfr_triangular_inverse(
+        cholesky_decomposed, cython.cast(int, n_max + 1), int(prec))
     for i in range((n_max + 1) ** 2):
         mpfr_clear(cholesky_decomposed[i])
     free(cholesky_decomposed)
 
-    result = np.ndarray((n_max + 1, n_max + 1), dtype='O')
+    ans = np.ndarray((n_max + 1, n_max + 1), dtype='O')
     for i in range(n_max + 1):
         for j in range(n_max + 1):
-            result[i][j] = cython.cast(RealNumber, cython.cast(RealField_class, field)._new())
-            mpfr_init2(cython.cast(mpfr_t, cython.cast(RealNumber, result[i][j]).value), prec)
-            mpfr_set(cython.cast(mpfr_t, cython.cast(RealNumber, result[i][j]).value), inversed[i * (n_max + 1) + j], MPFR_RNDN)
-            cython.cast(RealNumber, result[i][j])._parent = field
+            ans[i][j] = cython.cast(
+                RealNumber, cython.cast(RealField_class, field)._new())
+            mpfr_init2(
+                cython.cast(mpfr_t, cython.cast(RealNumber, ans[i][j]).value),
+                prec)
+            mpfr_set(
+                cython.cast(mpfr_t, cython.cast(RealNumber, ans[i][j]).value),
+                inversed[i * (n_max + 1) + j], MPFR_RNDN)
+            cython.cast(RealNumber, ans[i][j])._parent = field
             mpfr_clear(inversed[i * (n_max + 1) + j])
 
     free(inversed)
-    return result
+    return ans
 
 
 def max_index(v):
     # type: (Iterable[T]) -> int
     return max(enumerate(v), key=lambda x: abs(x[1]))[0]
+
 
 def normalizing_component_subtract(m, normalizing_vector):
     assert isinstance(normalizing_vector, np.ndarray), "normalizing_vector must be np.ndarray, but is {0}".format(
@@ -618,7 +704,8 @@ class damped_rational(object):
 
     @cython.locals(context=cb_universal_context)
     def __init__(self, poles, base, c, context):
-        self.__poles = format_poleinfo(poles, context)  # type: Dict[RealNumber, int]
+        # type: Dict[RealNumber, int]
+        self.__poles = format_poleinfo(poles, context)
 
     # return new rational g(Delta), where f(Delta + shift) = g(Delta)
     def shift(self, shift):
@@ -629,10 +716,10 @@ class damped_rational(object):
 
     # evaluate f(x)
     def __call__(self, x):
-        return (self.__base ** x) / self.denominator(x)
+        return (self.__base ** x) / self.denom(x)
 
     # evaluate denominator of f(x)
-    def denominator(self, x):
+    def denom(self, x):
         return reduce(lambda z, w: z * w, [(x - y) ** self.__poles[y] for y in self.__poles], 1 / self.__pref_constant)
 
     def orthogonal_polynomial(self, order):
@@ -700,7 +787,8 @@ class damped_rational(object):
                 p = p.__poles
             for x in p:
                 if x not in ans:
-                    raise RuntimeError("could not delete pole, {0}".format(p[x]))
+                    raise RuntimeError(
+                        "could not delete pole, {0}".format(p[x]))
                 ans[x] -= p[x]
                 if ans[x] < 0:
                     raise RuntimeError("could not delete pole")
@@ -735,8 +823,10 @@ class damped_rational(object):
     # this method does not change self
     def add_poles(self, location):
         # type: (Union[Dict[RealNumber, int], List[RealNumber], List[Tuple[RealNumber, int]]]) -> damped_rational
-        res_poles = damped_rational.poles_add((self.__poles, format_poleinfo(location)))
-        return damped_rational(res_poles, self.__base, self.__pref_constant, self.__context)
+        res_poles = damped_rational.poles_add(
+            (self.__poles, format_poleinfo(location)))
+        return damped_rational(
+            res_poles, self.__base, self.__pref_constant, self.__context)
 
     def lcm(self, p):
         # type: (dampled_rational) -> damped_rational
@@ -787,7 +877,9 @@ class positive_matrix_with_prefactor(object):
         self.matrix = matrix
 
     def shift(self, x):
-        return positive_matrix_with_prefactor(self.prefactor.shift(x), self.context.polynomial_vector_shift(self.matrix, x), self.context)
+        return positive_matrix_with_prefactor(
+            self.prefactor.shift(x),
+            self.context.polynomial_vector_shift(self.matrix, x), self.context)
 
     def degree_max(self):
         return max((np.vectorize(lambda y: self.context.Delta_Field(y).degree())(self.matrix)).flatten())
@@ -796,30 +888,36 @@ class positive_matrix_with_prefactor(object):
         return normalizing_component_subtract(self.matrix, v)
 
     def write(self, file_stream, v):
-            shuffled_matrix = np.array([[normalizing_component_subtract(y, v) for y in x] for x in self.matrix])
-            sample_points = laguerre_sample_points(self.degree_max() + 1, self.context.field, self.context.rho)
-            sample_scalings = map(self.prefactor, sample_points)
-            orthogonal_polynomial_vector = map(self.context.Delta_Field, self.prefactor.orthogonal_polynomial(self.degree_max()))
+        shuffled_matrix = np.array(
+            [
+                [normalizing_component_subtract(y, v) for y in x]
+                for x in self.matrix])
+        sample_points = laguerre_sample_points(
+            self.degree_max() + 1, self.context.field, self.context.rho)
+        sample_scalings = map(self.prefactor, sample_points)
+        orthogonal_polynomial_vector = map(
+            self.context.Delta_Field,
+            self.prefactor.orthogonal_polynomial(self.degree_max()))
 
-            file_stream.write("<polynomialVectorMatrix>\n")
-            file_stream.write("<rows>\n")
-            file_stream.write(repr(len(shuffled_matrix)))
-            file_stream.write("</rows>\n")
-            file_stream.write("<cols>\n")
-            file_stream.write(repr(len(shuffled_matrix[0])))
-            file_stream.write("</cols>\n")
-            file_stream.write("<elements>\n")
-            for x in shuffled_matrix:
-                for y in x:
-                    write_polynomial_vector(file_stream, y)
-            file_stream.write("</elements>\n")
-            write_vector(file_stream, "samplePoints", sample_points)
-            write_vector(file_stream, "sampleScalings", sample_scalings)
-            file_stream.write("<bilinearBasis>\n")
-            for x in orthogonal_polynomial_vector:
-                write_polynomial(file_stream, x)
-            file_stream.write("</bilinearBasis>\n")
-            file_stream.write("</polynomialVectorMatrix>\n")
+        file_stream.write("<polynomialVectorMatrix>\n")
+        file_stream.write("<rows>\n")
+        file_stream.write(repr(len(shuffled_matrix)))
+        file_stream.write("</rows>\n")
+        file_stream.write("<cols>\n")
+        file_stream.write(repr(len(shuffled_matrix[0])))
+        file_stream.write("</cols>\n")
+        file_stream.write("<elements>\n")
+        for x in shuffled_matrix:
+            for y in x:
+                write_polynomial_vector(file_stream, y)
+        file_stream.write("</elements>\n")
+        write_vector(file_stream, "samplePoints", sample_points)
+        write_vector(file_stream, "sampleScalings", sample_scalings)
+        file_stream.write("<bilinearBasis>\n")
+        for x in orthogonal_polynomial_vector:
+            write_polynomial(file_stream, x)
+        file_stream.write("</bilinearBasis>\n")
+        file_stream.write("</polynomialVectorMatrix>\n")
 
     def reshape(self, shape=None):
         if len(self.matrix.shape) == 3 and self.matrix.shape[0] == self.matrix.shape[1] and shape is None:
@@ -854,8 +952,8 @@ class prefactor_numerator(positive_matrix_with_prefactor):
         # reduce common factor
         new_pref = self.prefactor.div(gcd)
         div = div.div(gcd)
-        # division by div is equivalent to multiplication by div.denominator
-        return prefactor_numerator(new_pref, div.denominator(self.context.Delta) * self.matrix, self.context)
+        # division by div is equivalent to multiplication by div.denom
+        return prefactor_numerator(new_pref, div.denom(self.context.Delta) * self.matrix, self.context)
 
     def multiply_factored_rational(self, poles, factors, C):
         return self.add_poles(poles).multiply_factored_polynomial(factors, C)
@@ -888,8 +986,8 @@ class prefactor_numerator(positive_matrix_with_prefactor):
         if not isinstance(other, prefactor_numerator):
             raise NotImplementedError
         new_pref = self.prefactor.lcm(other.prefactor)
-        rem1 = new_pref.div(self.prefactor).denominator(self.context.Delta)
-        rem2 = new_pref.div(other.prefactor).denominator(self.context.Delta)
+        rem1 = new_pref.div(self.prefactor).denom(self.context.Delta)
+        rem2 = new_pref.div(other.prefactor).denom(self.context.Delta)
         new_matrix = rem1 * self.matrix + rem2 * other.matrix
         return prefactor_numerator(new_pref, new_matrix, self.context)
 
@@ -920,7 +1018,7 @@ def functional_to_spectra(ef_path, problem, context, label=None):
     norm = problem.normalization
     pvm = problem.pvm
     alpha = efm_from_sdpb_output(ef_path, norm, context)
-    polys = [Matrix(x.matrix.dot(alpha)).det() for x in pvm]
+    polys = [matrix(x.matrix.dot(alpha)).det() for x in pvm]
     if label is None:
         label = range(len(polys))
     return [find_local_minima(p, l) for p, l in zip(polys, label)]

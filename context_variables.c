@@ -32,7 +32,7 @@ void clear_cb_context(cb_context context) {
 mpfr_t* compute_rho_to_z_matrix(unsigned long Lambda_arg, long prec) {
     /* To avoid writing lambda + 1 so many times... */
     unsigned long Lambda = Lambda_arg + 1;
-    mpfr_t* temps = malloc(sizeof(mpfr_t) * (Lambda));
+    mpfr_t* temps = calloc(Lambda, sizeof(mpfr_t));
     mpfr_init2(temps[0], prec);
     mpfr_set_ui(temps[0], 8, MPFR_RNDN);
     mpfr_sqrt(temps[0], temps[0], MPFR_RNDN);
@@ -49,7 +49,7 @@ mpfr_t* compute_rho_to_z_matrix(unsigned long Lambda_arg, long prec) {
     mpfr_t temp2;
     mpfr_init2(temp2, prec);
 
-    mpfr_t* result = malloc(sizeof(mpfr_t) * (Lambda) * (Lambda));
+    mpfr_t* result = calloc(Lambda * Lambda, sizeof(mpfr_t));
     mpfr_init2(result[0], prec);
     mpfr_set_ui(result[0], 1, MPFR_RNDN);
     for (unsigned long j = 1; j < (Lambda * Lambda); j++) {

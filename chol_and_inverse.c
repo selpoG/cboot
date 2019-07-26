@@ -3,7 +3,7 @@
 #include <stdlib.h>
 
 mpfr_t* mpfr_triangular_inverse(mpfr_t* A, int dim, mpfr_prec_t prec) {
-    mpfr_t* res = malloc(sizeof(mpfr_t) * dim * dim);
+    mpfr_t* res = calloc(dim * dim, sizeof(mpfr_t));
 
     mpfr_t s;
     mpfr_t mul_temp;
@@ -58,7 +58,7 @@ mpfr_t* mpfr_triangular_inverse(mpfr_t* A, int dim, mpfr_prec_t prec) {
 }
 
 mpfr_t* mpfr_cholesky(mpfr_t* A, int dim, mpfr_prec_t prec) {
-    mpfr_t* res = malloc(sizeof(mpfr_t) * dim * dim);
+    mpfr_t* res = calloc(dim * dim, sizeof(mpfr_t));
 
     mpfr_t s;
     mpfr_t mul_temp;
@@ -93,8 +93,7 @@ mpfr_t* mpfr_cholesky(mpfr_t* A, int dim, mpfr_prec_t prec) {
 }
 
 mpfr_t* form_anti_band(mpfr_t* ab_vector, int dim, mpfr_prec_t prec) {
-    int dim_res = dim * dim;
-    mpfr_t* res = malloc(sizeof(mpfr_t) * dim_res);
+    mpfr_t* res = calloc(dim * dim, sizeof(mpfr_t));
     for (int i = 0; i < dim; i++) {
         for (int j = 0; j < dim; j++) {
             mpfr_init2(res[i * dim + j], prec);

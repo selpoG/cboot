@@ -11,7 +11,7 @@ mpfr_t* fast_partial_fraction_c(mpfr_t* pole_locations, int* double_or_single, i
             ++expected_result_length;
         }
     }
-    mpfr_t* result = malloc(sizeof(mpfr_t) * expected_result_length);
+    mpfr_t* result = calloc((unsigned int)expected_result_length, sizeof(mpfr_t));
     mpfr_t temp1;
     mpfr_init2(temp1, prec);
     int count_result_location = 0;

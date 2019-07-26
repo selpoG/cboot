@@ -466,11 +466,11 @@ def prefactor_integral(pole_data, base, x_power, prec, c=1):
             result[i] = result[i - 1] * minus_ln_b * i
         return result
     pole_data_to_c = cython.cast(
-        "mpfr_t*", malloc(cython.sizeof(mpfr_t) * len(pole_data)))
+        "mpfr_t*", calloc(len(pole_data), cython.sizeof(mpfr_t)))
     if pole_data_to_c == NULL:
         raise NotImplementedError
     is_double = cython.cast(
-        "int*", malloc(cython.sizeof(int) * len(pole_data)))
+        "int*", calloc(len(pole_data), cython.sizeof(int)))
 
     base_c = field(base)
     for i in range(n):
@@ -542,7 +542,7 @@ def anti_band_cholesky_inverse(v, n_order_max, prec):
         raise TypeError
 
     anti_band_input = cython.cast(
-        "mpfr_t*", malloc(cython.sizeof(mpfr_t) * len(v)))
+        "mpfr_t*", calloc(len(v), cython.sizeof(mpfr_t)))
     for i, val in enumerate(v):
         r = field(val)
         mpfr_init2(anti_band_input[i], prec)

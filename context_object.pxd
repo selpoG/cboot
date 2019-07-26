@@ -4,7 +4,7 @@ from sage.libs.mpfr cimport mpfr_t, mpfr_prec_t
 from sage.rings.real_mpfr cimport RealField_class, RealNumber
 
 cdef extern from "stdlib.h":
-    void* malloc(size_t size)
+    void* calloc(size_t num, size_t size)
     void free(void* ptr)
 
 cdef extern from "sage/cboot/integral_decomp.h":

@@ -7,7 +7,7 @@
 
 mpfr_t* simple_pole_case_c(long pole_order_max, mpfr_t base, mpfr_t pole_position, mpfr_t incomplete_gamma_factor,
                            mpfr_prec_t prec) {
-    mpfr_t* result = malloc(sizeof(mpfr_t) * (pole_order_max + 1));
+    mpfr_t* result = calloc(pole_order_max + 1, sizeof(mpfr_t));
 
     mpfr_t temp1;
     mpfr_init2(temp1, prec);
@@ -66,7 +66,7 @@ mpfr_t* simple_pole_case_c(long pole_order_max, mpfr_t base, mpfr_t pole_positio
 
 mpfr_t* double_pole_case_c(long pole_order_max, mpfr_t base, mpfr_t pole_position, mpfr_t incomplete_gamma_factor,
                            mpfr_prec_t prec) {
-    mpfr_t* result = malloc(sizeof(mpfr_t) * (pole_order_max + 1));
+    mpfr_t* result = calloc(pole_order_max + 1, sizeof(mpfr_t));
 
     mpfr_t temp1;
     mpfr_init2(temp1, prec);
@@ -125,7 +125,7 @@ mpfr_t* double_pole_case_c(long pole_order_max, mpfr_t base, mpfr_t pole_positio
      * */
 
     if (pole_order_max >= 1) {
-        single_pole_coeffs = malloc(sizeof(mpfr_t) * (pole_order_max));
+        single_pole_coeffs = calloc(pole_order_max, sizeof(mpfr_t));
         /*  x ^ (j + 1) = (
          *  single_pole_coeffs[0] x ^ (j - 1) +
          *  single_pole_coeffs[1] x ^ (j - 2) + ... +
@@ -142,7 +142,7 @@ mpfr_t* double_pole_case_c(long pole_order_max, mpfr_t base, mpfr_t pole_positio
          * single_pole_coeffs[0] =
          * */
         if (pole_order_max >= 2) {
-            factorial_times_power_lnb = malloc(sizeof(mpfr_t) * (pole_order_max - 1));
+            factorial_times_power_lnb = calloc(pole_order_max - 1, sizeof(mpfr_t));
             mpfr_init2(factorial_times_power_lnb[0], prec);
             mpfr_set(factorial_times_power_lnb[0], minus_log_base, MPFR_RNDN);
         }

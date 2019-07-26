@@ -81,7 +81,7 @@ mpfr_t* recursion_k(unsigned long nMax, mpfr_t h, mpfr_t S, mpfr_t P, mpfr_prec_
     }
     unsigned long order;
     order = nMax + 1;
-    mpfr_t* result = malloc(sizeof(mpfr_t) * order);
+    mpfr_t* result = calloc(order, sizeof(mpfr_t));
     mpfr_init2(result[0], prec);
     mpfr_set_ui(result[0], 1, rnd);
     mpfr_t smallNumber;
@@ -226,7 +226,7 @@ mpfr_t* recursion_k(unsigned long nMax, mpfr_t h, mpfr_t S, mpfr_t P, mpfr_prec_
 
 mpfr_t* k_table_c(mpfr_t h, mpfr_t S, mpfr_t P, cb_context context) {
     mpfr_t* hBlock = recursion_k(context.n_Max, h, S, P, context.prec, context.rnd);
-    mpfr_t* result_in_rho = malloc(sizeof(mpfr_t) * (context.lambda + 1));
+    mpfr_t* result_in_rho = calloc(context.lambda + 1, sizeof(mpfr_t));
     mpfr_t temp1;
     mpfr_t temp2;
     mpfr_t temp3;
@@ -265,7 +265,7 @@ mpfr_t* k_table_c(mpfr_t h, mpfr_t S, mpfr_t P, cb_context context) {
     }
     free(hBlock);
 
-    mpfr_t* result = malloc(sizeof(mpfr_t) * (context.lambda + 1));
+    mpfr_t* result = calloc(context.lambda + 1, sizeof(mpfr_t));
     for (long j = 0; j <= context.lambda; j++) {
         mpfr_init2(result[j], context.prec);
         // mpfr_set_ui(result[j], 0, context.rnd);
@@ -289,7 +289,7 @@ mpfr_t* k_table_c(mpfr_t h, mpfr_t S, mpfr_t P, cb_context context) {
 
 mpfr_t* chiral_h_times_rho_to_n_c(unsigned long n, mpfr_t h, mpfr_t S, mpfr_t P, cb_context context) {
     mpfr_t* hBlock = recursion_k(context.n_Max, h, S, P, context.prec, context.rnd);
-    mpfr_t* result_in_rho = malloc(sizeof(mpfr_t) * (context.lambda + 1));
+    mpfr_t* result_in_rho = calloc(context.lambda + 1, sizeof(mpfr_t));
     mpfr_t temp1;
     mpfr_t temp2;
     mpfr_t temp3;
@@ -327,7 +327,7 @@ mpfr_t* chiral_h_times_rho_to_n_c(unsigned long n, mpfr_t h, mpfr_t S, mpfr_t P,
     }
     free(hBlock);
 
-    mpfr_t* result = malloc(sizeof(mpfr_t) * (context.lambda + 1));
+    mpfr_t* result = calloc(context.lambda + 1, sizeof(mpfr_t));
     for (long j = 0; j <= context.lambda; j++) {
         mpfr_init2(result[j], context.prec);
         // mpfr_set_ui(result[j], 0, context.rnd);
@@ -358,7 +358,7 @@ mpfr_t* chiral_h_asymptotic_c(mpfr_t S, cb_context context) {
     mpfr_mul_ui(temp1, S, 2, context.rnd);
     mpfr_add_si(temp1, temp1, -1, context.rnd);
     mpfr_div_ui(temp1, temp1, 2, context.rnd);
-    mpfr_t* firstFactor = malloc(sizeof(mpfr_t) * (context.lambda + 1));
+    mpfr_t* firstFactor = calloc(context.lambda + 1, sizeof(mpfr_t));
     mpfr_init2(firstFactor[0], context.prec);
     mpfr_add_ui(temp2, context.rho, 1, context.rnd);
     mpfr_pow(firstFactor[0], temp2, temp1, context.rnd);
@@ -375,7 +375,7 @@ mpfr_t* chiral_h_asymptotic_c(mpfr_t S, cb_context context) {
     mpfr_mul_si(temp1, S, -2, context.rnd);
     mpfr_add_si(temp1, temp1, -1, context.rnd);
     mpfr_div_ui(temp1, temp1, 2, context.rnd);
-    mpfr_t* secondFactor = malloc(sizeof(mpfr_t) * (context.lambda + 1));
+    mpfr_t* secondFactor = calloc(context.lambda + 1, sizeof(mpfr_t));
     mpfr_init2(secondFactor[0], context.prec);
     mpfr_ui_sub(temp2, 1, context.rho, context.rnd);
     mpfr_pow(secondFactor[0], temp2, temp1, context.rnd);
@@ -388,7 +388,7 @@ mpfr_t* chiral_h_asymptotic_c(mpfr_t S, cb_context context) {
         mpfr_mul(secondFactor[j], secondFactor[j], temp2, context.rnd);
         mpfr_div_ui(secondFactor[j], secondFactor[j], j, context.rnd);
     }
-    mpfr_t* result_in_rho = malloc(sizeof(mpfr_t) * (context.lambda + 1));
+    mpfr_t* result_in_rho = calloc(context.lambda + 1, sizeof(mpfr_t));
     for (long j = 0; j <= context.lambda; j++) {
         mpfr_init2(result_in_rho[j], context.prec);
         // mpfr_set_ui(result_in_rho[j], 0, context.rnd);
@@ -407,7 +407,7 @@ mpfr_t* chiral_h_asymptotic_c(mpfr_t S, cb_context context) {
     free(firstFactor);
     free(secondFactor);
 
-    mpfr_t* result = malloc(sizeof(mpfr_t) * (context.lambda + 1));
+    mpfr_t* result = calloc((unsigned int)(context.lambda + 1), sizeof(mpfr_t));
     for (long i = 0; i <= context.lambda; i++) {
         mpfr_init2(result[i], context.prec);
         // mpfr_set_ui(result[i], 0, context.rnd);

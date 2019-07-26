@@ -1,8 +1,8 @@
 #include "k_compute.h"
-#include <stdlib.h>
-#define deb(x) printf("deb %f\n", x)
 
-void set_k_coeffs(mpfr_t a[4][3], mpfr_t h, mpfr_t S, mpfr_t P, mpfr_prec_t prec, mp_rnd_t rnd) {
+#include <stdlib.h>
+
+void set_k_coeffs(mpfr_t a[4][3], mpfr_t h, mpfr_t S, mpfr_t P, mpfr_prec_t prec, mpfr_rnd_t rnd) {
     mpfr_t _t_0;
     mpfr_init2(_t_0, prec);
     mpfr_t _t_1;
@@ -47,6 +47,7 @@ void set_k_coeffs(mpfr_t a[4][3], mpfr_t h, mpfr_t S, mpfr_t P, mpfr_prec_t prec
     mpfr_clear(_t_0);
     mpfr_clear(_t_1);
 }
+
 void initialize_k_coeffs(mpfr_t a[4][3], mpfr_prec_t prec) {
     for (int i = 0; i <= 3; i++) {
         for (int j = 0; j <= 2; j++) {
@@ -54,6 +55,7 @@ void initialize_k_coeffs(mpfr_t a[4][3], mpfr_prec_t prec) {
         }
     }
 }
+
 void deallocate_k_coeffs(mpfr_t a[4][3]) {
     for (int i = 0; i <= 3; i++) {
         for (int j = 0; j <= 2; j++) {
@@ -62,7 +64,7 @@ void deallocate_k_coeffs(mpfr_t a[4][3]) {
     }
 }
 
-void k_evaluate_at_n(mpfr_t a[4], mpfr_t rho[4][3], long n, mp_rnd_t rnd) {
+void k_evaluate_at_n(mpfr_t a[4], mpfr_t rho[4][3], long n, mpfr_rnd_t rnd) {
     for (int i = 0; i <= 3; i++) {
         mpfr_set(a[i], rho[i][2], rnd);
         for (int j = 0; j <= 1; j++) {
@@ -72,77 +74,7 @@ void k_evaluate_at_n(mpfr_t a[4], mpfr_t rho[4][3], long n, mp_rnd_t rnd) {
     }
 }
 
-// mpfr_t* rhoInZ(unsigned long Lambda, long prec);
-
-// static int lambda_at_Module = -1;
-// static mp_rnd_t rnd = MPFR_RNDN;
-// static mpfr_prec_t precision_at_Module = -1;
-// static long nMax_at_Module = 250;
-// static mpfr_t zeroAtPrecision;
-// static mpfr_t rho;
-// static mpfr_t rhoPrime;
-
-mpfr_t* rhoInZ(unsigned long Lambda_arg, long prec) {
-    /* This time I was bothered to write lambda + 1 so many times... */
-    unsigned long Lambda = Lambda_arg + 1;
-    mpfr_t* temps = malloc(sizeof(mpfr_t) * (Lambda));
-    mpfr_init2(temps[0], prec);
-    mpfr_set_ui(temps[0], 8, MPFR_RNDN);
-    mpfr_sqrt(temps[0], temps[0], MPFR_RNDN);
-    mpfr_neg(temps[0], temps[0], MPFR_RNDN);
-    for (unsigned long j = 1; j < Lambda; j++) {
-        mpfr_init2(temps[j], prec);
-        mpfr_mul_si(temps[j], temps[j - 1], 2 * j - 3, MPFR_RNDN);
-        mpfr_div_ui(temps[j], temps[j], j, MPFR_RNDN);
-    }
-    mpfr_sub_ui(temps[1], temps[1], 2, MPFR_RNDN);
-    mpfr_add_ui(temps[0], temps[0], 3, MPFR_RNDN);
-    mpfr_t temp;
-    mpfr_init2(temp, prec);
-    mpfr_t temp2;
-    mpfr_init2(temp2, prec);
-
-    mpfr_t* result = malloc(sizeof(mpfr_t) * (Lambda) * (Lambda));
-    mpfr_init2(result[0], prec);
-    mpfr_set_ui(result[0], 1, MPFR_RNDN);
-    for (unsigned long j = 1; j < (Lambda * Lambda); j++) {
-        mpfr_init2(result[j], prec);
-        // mpfr_set_ui(result[j], 0, MPFR_RNDN);
-        mpfr_set_zero(result[j], 1);
-    }
-    for (unsigned long j = 1; j < Lambda; j++) {
-        mpfr_set_ui(temp, 1, MPFR_RNDN);
-        for (unsigned long k = 0; k <= j; k++) {
-            mpfr_mul(temp2, temps[j - k], temp, MPFR_RNDN);
-            mpfr_add(result[j + Lambda], result[j + Lambda], temp2, MPFR_RNDN);
-            mpfr_mul_si(temp, temp, -2, MPFR_RNDN);
-        }
-    }
-    for (unsigned long i = 2; i < Lambda; i++) {
-        for (unsigned long j = 1; j < Lambda; j++) {
-            for (unsigned long k = i - 1; k < Lambda - j; k++) {
-                mpfr_mul(temp, result[Lambda * (i - 1) + k], result[j + Lambda], MPFR_RNDN);
-                mpfr_add(result[Lambda * i + k + j], result[Lambda * i + k + j], temp, MPFR_RNDN);
-            }
-        }
-    }
-
-    /* transposition */
-    for (unsigned long i = 0; i < Lambda; i++) {
-        for (unsigned long j = 0; j < i; j++) {
-            mpfr_swap(result[i + Lambda * j], result[j + Lambda * i]);
-        }
-    }
-    for (unsigned long j = 0; j < Lambda; j++) {
-        mpfr_clear(temps[j]);
-    }
-    free(temps);
-    mpfr_clear(temp);
-    mpfr_clear(temp2);
-    return result;
-}
-
-mpfr_t* recursion_k(unsigned long nMax, mpfr_t h, mpfr_t S, mpfr_t P, mpfr_prec_t prec, mp_rnd_t rnd) {
+mpfr_t* recursion_k(unsigned long nMax, mpfr_t h, mpfr_t S, mpfr_t P, mpfr_prec_t prec, mpfr_rnd_t rnd) {
     if (nMax <= 3) {
         printf("error: too small order of expansion in \"recursionSpinZeroVector\" function.");
         return NULL;

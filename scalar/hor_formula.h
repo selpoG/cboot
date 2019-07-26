@@ -1,8 +1,9 @@
-#include <stdlib.h>
-#include "mpfr.h"
+#ifndef SAGE_CBOOT_SCALAR_HOR_FORMULA_H
+#define SAGE_CBOOT_SCALAR_HOR_FORMULA_H
 
-#ifndef __RHOREC_MPFR_2_
-#define __RHOREC_MPFR_2_
+#include <stdlib.h>
+
+#include "mpfr.h"
 
 /*
  * Hogervorst-Osborn-Rycykov recursion relation takes the form
@@ -26,14 +27,9 @@
  * */
 
 void set_nonzero_spin_rec_coeffs(mpfr_t result[8][5], mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S, mpfr_t P,
-                                 mpfr_prec_t prec, mp_rnd_t rnd);
+                                 mpfr_prec_t prec, mpfr_rnd_t rnd);
 void set_zero_spin_rec_coeffs(mpfr_t result[6][4], mpfr_t epsilon, mpfr_t Delta, mpfr_t S, mpfr_t P, mpfr_prec_t prec,
-                              mp_rnd_t rnd);
-
-void set_nonzero_spin_rec_coeffs_deriv(mpfr_t result[8][5], mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S,
-                                       mpfr_t P, mpfr_prec_t prec, mp_rnd_t rnd);
-void set_zero_spin_rec_coeffs_deriv(mpfr_t result[6][4], mpfr_t epsilon, mpfr_t Delta, mpfr_t S, mpfr_t P,
-                                    mpfr_prec_t prec, mp_rnd_t rnd);
+                              mpfr_rnd_t rnd);
 
 void initialize_spin_nonzero_coeffs_folder(mpfr_t a[8][5], mpfr_prec_t prec);
 void initialize_spin_zero_coeffs_folder(mpfr_t a[6][4], mpfr_prec_t prec);
@@ -41,7 +37,7 @@ void initialize_spin_zero_coeffs_folder(mpfr_t a[6][4], mpfr_prec_t prec);
 void deallocate_spin_nonzero_coeffs_folder(mpfr_t a[8][5]);
 void deallocate_spin_zero_coeffs_folder(mpfr_t a[6][4]);
 
-void spin_nonzero_evaluate_at_n(mpfr_t a[8], mpfr_t rho[8][5], long n, mpfr_prec_t prec, mp_rnd_t rnd);
-void spin_zero_evaluate_at_n(mpfr_t a[6], mpfr_t rho[6][4], long n, mp_rnd_t rnd);
+void spin_nonzero_evaluate_at_n(mpfr_t a[8], mpfr_t rho[8][5], long n, mpfr_prec_t prec, mpfr_rnd_t rnd);
+void spin_zero_evaluate_at_n(mpfr_t a[6], mpfr_t rho[6][4], long n, mpfr_rnd_t rnd);
 
 #endif

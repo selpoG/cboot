@@ -1,10 +1,10 @@
 #include "hor_recursion.h"
+
 #include <stdio.h>
 #include <stdlib.h>
-#define deb(x) printf("debug at position %f\n", x)
 
 mpfr_t* recursionNonZeroVector(unsigned long nMax, mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S, mpfr_t P,
-                               mpfr_prec_t prec, mp_rnd_t rnd) {
+                               mpfr_prec_t prec, mpfr_rnd_t rnd) {
     if (nMax <= 7) {
         printf("error: too small order of expansion in \"recursionSpinZeroVector\" function.");
         return NULL;
@@ -155,7 +155,7 @@ mpfr_t* recursionNonZeroVector(unsigned long nMax, mpfr_t epsilon, mpfr_t ell, m
 }
 
 mpfr_t* recursionSpinZeroVector(unsigned long nMax, mpfr_t epsilon, mpfr_t Delta, mpfr_t S, mpfr_t P, mpfr_prec_t prec,
-                                mp_rnd_t rnd) {
+                                mpfr_rnd_t rnd) {
     if (nMax <= 5) {
         printf("error: too small order of expansion in \"recursionSpinZeroVector\" function.");
         return NULL;
@@ -370,6 +370,7 @@ mpfr_t* real_axis_result(mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S, mpf
 
     return result;
 }
+
 long indexOfConformalBlock(cb_context context, int n, int m) {
     if (m >= 0 && n >= 0) {
         return (context.lambda + 2 - n) * n + m;

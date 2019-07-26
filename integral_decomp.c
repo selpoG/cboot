@@ -1,6 +1,7 @@
 #include "integral_decomp.h"
+
 #include <stdlib.h>
-#define deb(d) printf("deb %f\n", d)
+
 #undef debug_mode
 // #define debug_mode 1
 
@@ -169,16 +170,16 @@ mpfr_t* double_pole_case_c(long pole_order_max, mpfr_t base, mpfr_t pole_positio
             }
         }
     }
+
 #ifdef debug_mode
     for (int j = 0; j <= pole_order_max - 1; j++) {
         mpfr_printf("single_pole_coeffs[%d] = %.16RNf\n", j, single_pole_coeffs[j]);
     }
-#endif
-#ifdef debug_mode
     for (int j = 0; j <= pole_order_max - 2; j++) {
         mpfr_printf("factorial_times_power_lnb[%d] = %.16RNf\n", j, factorial_times_power_lnb[j]);
     }
 #endif
+
     for (int j = 0; j <= pole_order_max - 2; j++) {
         for (int k = 0; k <= j; k++) {
             mpfr_mul(temp2, factorial_times_power_lnb[k], single_pole_coeffs[j - k], MPFR_RNDN);

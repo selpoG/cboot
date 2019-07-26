@@ -1,7 +1,9 @@
 #include "context_variables.h"
+
 #include <stdlib.h>
 
-/* basic constructor for cb_context */
+mpfr_t* compute_rho_to_z_matrix(unsigned long Lambda_arg, long prec);
+
 cb_context context_construct(long n_Max, mpfr_prec_t prec, int lambda) {
     cb_context result;
     result.n_Max = n_Max;

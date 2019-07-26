@@ -1,5 +1,5 @@
 #include "k_compute.h"
-
+#include <stdlib.h>
 #define deb(x) printf("deb %f\n", x)
 
 void set_k_coeffs(mpfr_t a[4][3], mpfr_t h, mpfr_t S, mpfr_t P, mpfr_prec_t prec, mp_rnd_t rnd) {
@@ -62,7 +62,7 @@ void deallocate_k_coeffs(mpfr_t a[4][3]) {
     }
 }
 
-void k_evaluate_at_n(mpfr_t a[4], mpfr_t rho[4][3], long n, mpfr_prec_t prec, mp_rnd_t rnd) {
+void k_evaluate_at_n(mpfr_t a[4], mpfr_t rho[4][3], long n, mp_rnd_t rnd) {
     for (int i = 0; i <= 3; i++) {
         mpfr_set(a[i], rho[i][2], rnd);
         for (int j = 0; j <= 1; j++) {
@@ -170,7 +170,7 @@ mpfr_t* recursion_k(unsigned long nMax, mpfr_t h, mpfr_t S, mpfr_t P, mpfr_prec_
     }
     for (unsigned long i = 1; i <= 2; i++) {
         mpfr_set_si(temp, 0, rnd);
-        k_evaluate_at_n(as, recCoeffs, i, prec, rnd);
+        k_evaluate_at_n(as, recCoeffs, i, rnd);
         if (mpfr_cmp_ui(as[0], 0) == 0) {
             for (unsigned long k = 0; k < i; k++) {
                 mpfr_clear(result[k]);
@@ -225,7 +225,7 @@ mpfr_t* recursion_k(unsigned long nMax, mpfr_t h, mpfr_t S, mpfr_t P, mpfr_prec_
     }
     for (unsigned long i = 3; i <= nMax; i++) {
         mpfr_set_si(temp, 0, rnd);
-        k_evaluate_at_n(as, recCoeffs, i, prec, rnd);
+        k_evaluate_at_n(as, recCoeffs, i, rnd);
         if (mpfr_cmp_ui(as[0], 0) == 0) {
             printf("possible 0-division at loop %ld \n", i);
             for (unsigned long k = 0; k < i; k++) {
@@ -307,7 +307,7 @@ mpfr_t* k_table_c(mpfr_t h, mpfr_t S, mpfr_t P, cb_context context) {
     mpfr_mul_ui(temp1, context.rho, 4, context.rnd);
     mpfr_pow(temp1, temp1, h, context.rnd);
 
-    for (unsigned long j = 0; j <= context.n_Max; j++) {
+    for (long j = 0; j <= context.n_Max; j++) {
         mpfr_mul(hBlock[j], hBlock[j], temp1, context.rnd);
         mpfr_add(result_in_rho[0], result_in_rho[0], hBlock[j], context.rnd);
         if (j < context.n_Max) {
@@ -317,7 +317,7 @@ mpfr_t* k_table_c(mpfr_t h, mpfr_t S, mpfr_t P, cb_context context) {
     for (int i = 1; i <= context.lambda; i++) {
         mpfr_init2(result_in_rho[i], context.prec);
         mpfr_set_si(result_in_rho[i], 0, context.rnd);
-        for (unsigned long j = 0; j <= context.n_Max; j++) {
+        for (long j = 0; j <= context.n_Max; j++) {
             mpfr_add_si(temp1, h, (j - i + 1), context.rnd);
             mpfr_mul(hBlock[j], hBlock[j], temp1, context.rnd);
             mpfr_add(result_in_rho[i], result_in_rho[i], hBlock[j], context.rnd);
@@ -334,16 +334,16 @@ mpfr_t* k_table_c(mpfr_t h, mpfr_t S, mpfr_t P, cb_context context) {
     free(hBlock);
 
     mpfr_t* result = malloc(sizeof(mpfr_t) * (context.lambda + 1));
-    for (unsigned long j = 0; j <= context.lambda; j++) {
+    for (long j = 0; j <= context.lambda; j++) {
         mpfr_init2(result[j], context.prec);
         // mpfr_set_ui(result[j], 0, context.rnd);
         mpfr_set_zero(result[j], 1);
-        for (unsigned long k = 0; k <= context.lambda; k++) {
+        for (long k = 0; k <= context.lambda; k++) {
             mpfr_mul(temp1, result_in_rho[k], context.rho_to_z_matrix[k + (context.lambda + 1) * j], context.rnd);
             mpfr_add(result[j], result[j], temp1, context.rnd);
         }
     }
-    for (unsigned long j = 0; j <= context.lambda; j++) {
+    for (long j = 0; j <= context.lambda; j++) {
         mpfr_clear(result_in_rho[j]);
     }
 
@@ -370,7 +370,7 @@ mpfr_t* chiral_h_times_rho_to_n_c(unsigned long n, mpfr_t h, mpfr_t S, mpfr_t P,
     mpfr_mul_ui(temp1, context.rho, 4, context.rnd);
     mpfr_pow_ui(temp1, temp1, n, context.rnd);
 
-    for (unsigned long j = 0; j <= context.n_Max; j++) {
+    for (long j = 0; j <= context.n_Max; j++) {
         mpfr_mul(hBlock[j], hBlock[j], temp1, context.rnd);
         mpfr_add(result_in_rho[0], result_in_rho[0], hBlock[j], context.rnd);
         if (j < context.n_Max) {
@@ -380,7 +380,7 @@ mpfr_t* chiral_h_times_rho_to_n_c(unsigned long n, mpfr_t h, mpfr_t S, mpfr_t P,
     for (int i = 1; i <= context.lambda; i++) {
         mpfr_init2(result_in_rho[i], context.prec);
         mpfr_set_si(result_in_rho[i], 0, context.rnd);
-        for (unsigned long j = 0; j <= context.n_Max; j++) {
+        for (long j = 0; j <= context.n_Max; j++) {
             mpfr_mul_si(hBlock[j], hBlock[j], n + j - i + 1, context.rnd);
             mpfr_add(result_in_rho[i], result_in_rho[i], hBlock[j], context.rnd);
         }
@@ -396,16 +396,16 @@ mpfr_t* chiral_h_times_rho_to_n_c(unsigned long n, mpfr_t h, mpfr_t S, mpfr_t P,
     free(hBlock);
 
     mpfr_t* result = malloc(sizeof(mpfr_t) * (context.lambda + 1));
-    for (unsigned long j = 0; j <= context.lambda; j++) {
+    for (long j = 0; j <= context.lambda; j++) {
         mpfr_init2(result[j], context.prec);
         // mpfr_set_ui(result[j], 0, context.rnd);
         mpfr_set_zero(result[j], 1);
-        for (unsigned long k = 0; k <= context.lambda; k++) {
+        for (long k = 0; k <= context.lambda; k++) {
             mpfr_mul(temp1, result_in_rho[k], context.rho_to_z_matrix[k + (context.lambda + 1) * j], context.rnd);
             mpfr_add(result[j], result[j], temp1, context.rnd);
         }
     }
-    for (unsigned long j = 0; j <= context.lambda; j++) {
+    for (long j = 0; j <= context.lambda; j++) {
         mpfr_clear(result_in_rho[j]);
     }
 
@@ -431,7 +431,7 @@ mpfr_t* chiral_h_asymptotic_c(mpfr_t S, cb_context context) {
     mpfr_add_ui(temp2, context.rho, 1, context.rnd);
     mpfr_pow(firstFactor[0], temp2, temp1, context.rnd);
     mpfr_ui_div(temp2, 1, temp2, context.rnd);
-    for (unsigned long j = 1; j <= context.lambda; j++) {
+    for (long j = 1; j <= context.lambda; j++) {
         mpfr_init2(firstFactor[j], context.prec);
         mpfr_add_si(temp3, temp1, -j + 1, context.rnd);
         mpfr_mul(firstFactor[j], firstFactor[j - 1], temp3, context.rnd);
@@ -449,7 +449,7 @@ mpfr_t* chiral_h_asymptotic_c(mpfr_t S, cb_context context) {
     mpfr_pow(secondFactor[0], temp2, temp1, context.rnd);
     mpfr_ui_div(temp2, 1, temp2, context.rnd);
     mpfr_neg(temp2, temp2, context.rnd);
-    for (unsigned long j = 1; j <= context.lambda; j++) {
+    for (long j = 1; j <= context.lambda; j++) {
         mpfr_init2(secondFactor[j], context.prec);
         mpfr_add_si(temp3, temp1, -j + 1, context.rnd);
         mpfr_mul(secondFactor[j], secondFactor[j - 1], temp3, context.rnd);
@@ -457,36 +457,36 @@ mpfr_t* chiral_h_asymptotic_c(mpfr_t S, cb_context context) {
         mpfr_div_ui(secondFactor[j], secondFactor[j], j, context.rnd);
     }
     mpfr_t* result_in_rho = malloc(sizeof(mpfr_t) * (context.lambda + 1));
-    for (unsigned long j = 0; j <= context.lambda; j++) {
+    for (long j = 0; j <= context.lambda; j++) {
         mpfr_init2(result_in_rho[j], context.prec);
         // mpfr_set_ui(result_in_rho[j], 0, context.rnd);
         mpfr_set_zero(result_in_rho[j], 1);
-        for (unsigned long k = 0; k <= j; k++) {
+        for (long k = 0; k <= j; k++) {
             mpfr_mul(temp1, firstFactor[k], secondFactor[j - k], context.rnd);
             mpfr_add(result_in_rho[j], result_in_rho[j], temp1, context.rnd);
         }
     }
-    for (unsigned long j = 0; j <= context.lambda; j++) {
+    for (long j = 0; j <= context.lambda; j++) {
         mpfr_clear(firstFactor[j]);
     };
-    for (unsigned long j = 0; j <= context.lambda; j++) {
+    for (long j = 0; j <= context.lambda; j++) {
         mpfr_clear(secondFactor[j]);
     };
     free(firstFactor);
     free(secondFactor);
 
     mpfr_t* result = malloc(sizeof(mpfr_t) * (context.lambda + 1));
-    for (unsigned long i = 0; i <= context.lambda; i++) {
+    for (long i = 0; i <= context.lambda; i++) {
         mpfr_init2(result[i], context.prec);
         // mpfr_set_ui(result[i], 0, context.rnd);
         mpfr_set_zero(result[i], 1);
-        for (unsigned long j = 0; j <= context.lambda; j++) {
+        for (long j = 0; j <= context.lambda; j++) {
             mpfr_mul(temp1, result_in_rho[j], context.rho_to_z_matrix[j + (context.lambda + 1) * i], context.rnd);
             mpfr_add(result[i], result[i], temp1, context.rnd);
         }
     }
 
-    for (unsigned long i = 0; i <= context.lambda; i++) {
+    for (long i = 0; i <= context.lambda; i++) {
         mpfr_clear(result_in_rho[i]);
     }
 

@@ -1,5 +1,6 @@
 #include "hor_formula.h"
-void inline set_nonzero_spin_rec_coeffs(mpfr_t a[8][5], mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S, mpfr_t P,
+
+inline void set_nonzero_spin_rec_coeffs(mpfr_t a[8][5], mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S, mpfr_t P,
                                         mpfr_prec_t prec, mp_rnd_t rnd) {
     mpfr_t _t_0;
     mpfr_init2(_t_0, prec);
@@ -1842,7 +1843,8 @@ void inline set_nonzero_spin_rec_coeffs(mpfr_t a[8][5], mpfr_t epsilon, mpfr_t e
     mpfr_clear(_t_3);
     mpfr_clear(_t_4);
 }
-void inline set_zero_spin_rec_coeffs(mpfr_t a[6][4], mpfr_t epsilon, mpfr_t Delta, mpfr_t S, mpfr_t P, mpfr_prec_t prec,
+
+inline void set_zero_spin_rec_coeffs(mpfr_t a[6][4], mpfr_t epsilon, mpfr_t Delta, mpfr_t S, mpfr_t P, mpfr_prec_t prec,
                                      mp_rnd_t rnd) {
     mpfr_t _t_0;
     mpfr_init2(_t_0, prec);
@@ -2149,7 +2151,7 @@ void inline set_zero_spin_rec_coeffs(mpfr_t a[6][4], mpfr_t epsilon, mpfr_t Delt
     mpfr_clear(_t_3);
 }
 
-void inline set_nonzero_spin_rec_coeffs_deriv(mpfr_t a[8][5], mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S,
+inline void set_nonzero_spin_rec_coeffs_deriv(mpfr_t a[8][5], mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S,
                                               mpfr_t P, mpfr_prec_t prec, mp_rnd_t rnd) {
     mpfr_t _t_0;
     mpfr_init2(_t_0, prec);
@@ -2766,7 +2768,8 @@ void inline set_nonzero_spin_rec_coeffs_deriv(mpfr_t a[8][5], mpfr_t epsilon, mp
     mpfr_clear(_t_2);
     mpfr_clear(_t_3);
 }
-void inline set_zero_spin_rec_coeffs_deriv(mpfr_t a[6][4], mpfr_t epsilon, mpfr_t Delta, mpfr_t S, mpfr_t P,
+
+inline void set_zero_spin_rec_coeffs_deriv(mpfr_t a[6][4], mpfr_t epsilon, mpfr_t Delta, mpfr_t S, mpfr_t P,
                                            mpfr_prec_t prec, mp_rnd_t rnd) {
     mpfr_t _t_0;
     mpfr_init2(_t_0, prec);
@@ -3126,7 +3129,7 @@ void spin_nonzero_evaluate_at_n(mpfr_t a[8], mpfr_t rho[8][5], long n, mpfr_prec
     // mpfr_clear(temp2);
 }
 
-void spin_zero_evaluate_at_n(mpfr_t a[6], mpfr_t rho[6][4], long n, mpfr_prec_t prec, mp_rnd_t rnd) {
+void spin_zero_evaluate_at_n(mpfr_t a[6], mpfr_t rho[6][4], long n, mp_rnd_t rnd) {
     // mpfr_t temp1;
     // mpfr_t temp2;
     // mpfr_init2(temp1, prec);

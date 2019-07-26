@@ -1,4 +1,6 @@
 #include "chol_and_inverse.h"
+#include <stdlib.h>
+
 mpfr_t* mpfr_triangular_inverse(mpfr_t* A, int dim, mpfr_prec_t prec) {
     mpfr_t* res = malloc(sizeof(mpfr_t) * dim * dim);
 

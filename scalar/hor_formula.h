@@ -1,5 +1,5 @@
+#include <stdlib.h>
 #include "mpfr.h"
-#include "stdlib.h"
 
 #ifndef __RHOREC_MPFR_2_
 #define __RHOREC_MPFR_2_
@@ -42,6 +42,6 @@ void deallocate_spin_nonzero_coeffs_folder(mpfr_t a[8][5]);
 void deallocate_spin_zero_coeffs_folder(mpfr_t a[6][4]);
 
 void spin_nonzero_evaluate_at_n(mpfr_t a[8], mpfr_t rho[8][5], long n, mpfr_prec_t prec, mp_rnd_t rnd);
-void spin_zero_evaluate_at_n(mpfr_t a[6], mpfr_t rho[6][4], long n, mpfr_prec_t prec, mp_rnd_t rnd);
+void spin_zero_evaluate_at_n(mpfr_t a[6], mpfr_t rho[6][4], long n, mp_rnd_t rnd);
 
 #endif

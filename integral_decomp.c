@@ -1,4 +1,5 @@
 #include "integral_decomp.h"
+#include <stdlib.h>
 #define deb(d) printf("deb %f\n", d)
 #undef debug_mode
 // #define debug_mode 1
@@ -116,8 +117,8 @@ mpfr_t* double_pole_case_c(long pole_order_max, mpfr_t base, mpfr_t pole_positio
     }
 #endif
 
-    mpfr_t* factorial_times_power_lnb;
-    mpfr_t* single_pole_coeffs;
+    mpfr_t* factorial_times_power_lnb = NULL;
+    mpfr_t* single_pole_coeffs = NULL;
     /*
      * x ** 1 / (x + a) ** 2 case
      * */

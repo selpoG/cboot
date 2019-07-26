@@ -1,4 +1,5 @@
 #include "context_variables.h"
+#include <stdlib.h>
 
 /* basic constructor for cb_context */
 cb_context context_construct(long n_Max, mpfr_prec_t prec, int lambda) {

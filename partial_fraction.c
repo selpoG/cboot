@@ -1,4 +1,5 @@
 #include "partial_fraction.h"
+#include <stdlib.h>
 #define deb(num) printf("deb %f\n", num)
 
 mpfr_t* fast_partial_fraction_c(mpfr_t* pole_locations, int* double_or_single, int n_poles, mpfr_prec_t prec) {

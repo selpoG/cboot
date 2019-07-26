@@ -1,6 +1,6 @@
+#include <stdio.h>
 #include "context_variables.h"
 #include "hor_formula.h"
-#include "stdio.h"
 
 #ifndef CONFORMAL_BLOCK_COMPUTE
 #define CONFORMAL_BLOCK_COMPUTE

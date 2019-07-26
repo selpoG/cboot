@@ -1,5 +1,6 @@
 #include "hor_recursion.h"
-#include "stdio.h"
+#include <stdio.h>
+#include <stdlib.h>
 #define deb(x) printf("debug at position %f\n", x)
 
 mpfr_t* recursionNonZeroVector(unsigned long nMax, mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S, mpfr_t P,
@@ -11,7 +12,6 @@ mpfr_t* recursionNonZeroVector(unsigned long nMax, mpfr_t epsilon, mpfr_t ell, m
     unsigned long order;
     order = nMax + 1;
     mpfr_t* result = malloc(sizeof(mpfr_t) * order);
-    mpfr_t* result_deriv = malloc(sizeof(mpfr_t) * order);
 
     mpfr_init2(result[0], prec);
     mpfr_set_ui(result[0], 1, rnd);
@@ -25,9 +25,6 @@ mpfr_t* recursionNonZeroVector(unsigned long nMax, mpfr_t epsilon, mpfr_t ell, m
     mpfr_init2(temp2, prec);
 
     mpfr_t recCoeffs[8][5];
-    mpfr_t recCoeffs_deriv[8][5];
-
-    int has_a_zero_been_zero = 0;
 
     initialize_spin_nonzero_coeffs_folder(recCoeffs, prec);
     set_nonzero_spin_rec_coeffs(recCoeffs, epsilon, ell, Delta, S, P, prec, rnd);
@@ -189,7 +186,7 @@ mpfr_t* recursionSpinZeroVector(unsigned long nMax, mpfr_t epsilon, mpfr_t Delta
     }
     for (unsigned long i = 1; i <= 5; i++) {
         mpfr_set_si(temp, 0, rnd);
-        spin_zero_evaluate_at_n(as, recCoeffs, i, prec, rnd);
+        spin_zero_evaluate_at_n(as, recCoeffs, i, rnd);
         if (mpfr_cmp_ui(as[0], 0) == 0) {
             for (unsigned long k = 0; k < i; k++) {
                 mpfr_clear(result[k]);
@@ -243,7 +240,7 @@ mpfr_t* recursionSpinZeroVector(unsigned long nMax, mpfr_t epsilon, mpfr_t Delta
     }
     for (unsigned long i = 6; i <= nMax; i++) {
         mpfr_set_si(temp, 0, rnd);
-        spin_zero_evaluate_at_n(as, recCoeffs, i, prec, rnd);
+        spin_zero_evaluate_at_n(as, recCoeffs, i, rnd);
         if (mpfr_cmp_ui(as[0], 0) == 0) {
             for (unsigned long k = 0; k < i; k++) {
                 mpfr_clear(result[k]);
@@ -327,7 +324,7 @@ mpfr_t* real_axis_result(mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S, mpf
     mpfr_mul_ui(temp1, context.rho, 4, context.rnd);
     mpfr_pow(temp1, temp1, Delta, context.rnd);
 
-    for (unsigned long j = 0; j <= context.n_Max; j++) {
+    for (long j = 0; j <= context.n_Max; j++) {
         mpfr_mul(hBlock[j], hBlock[j], temp1, context.rnd);
         mpfr_add(result_in_rho[0], result_in_rho[0], hBlock[j], context.rnd);
         if (j < context.n_Max) {
@@ -337,8 +334,8 @@ mpfr_t* real_axis_result(mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S, mpf
     for (int i = 1; i <= context.lambda; i++) {
         mpfr_init2(result_in_rho[i], context.prec);
         mpfr_set_si(result_in_rho[i], 0, context.rnd);
-        for (unsigned long j = 0; j <= context.n_Max; j++) {
-            mpfr_add_si(temp1, Delta, (j - i + 1), context.rnd);
+        for (long j = 0; j <= context.n_Max; j++) {
+            mpfr_add_si(temp1, Delta, j - i + 1, context.rnd);
             mpfr_mul(hBlock[j], hBlock[j], temp1, context.rnd);
             mpfr_add(result_in_rho[i], result_in_rho[i], hBlock[j], context.rnd);
         }
@@ -354,15 +351,15 @@ mpfr_t* real_axis_result(mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S, mpf
 
     free(hBlock);
     mpfr_t* result = malloc(sizeof(mpfr_t) * (context.lambda + 1));
-    for (unsigned long j = 0; j <= context.lambda; j++) {
+    for (long j = 0; j <= context.lambda; j++) {
         mpfr_init2(result[j], context.prec);
         mpfr_set_zero(result[j], 1);
-        for (unsigned long k = 0; k <= context.lambda; k++) {
+        for (long k = 0; k <= context.lambda; k++) {
             mpfr_mul(temp1, result_in_rho[k], context.rho_to_z_matrix[k + (context.lambda + 1) * j], MPFR_RNDN);
             mpfr_add(result[j], result[j], temp1, MPFR_RNDN);
         }
     }
-    for (unsigned long j = 0; j <= context.lambda; j++) {
+    for (long j = 0; j <= context.lambda; j++) {
         mpfr_clear(result_in_rho[j]);
     }
 
@@ -556,7 +553,7 @@ mpfr_t* casimirExpander(mpfr_t* realAxisResult, mpfr_t epsilon, mpfr_t ell, mpfr
 mpfr_t* gBlock_full(mpfr_t epsilon, mpfr_t ell, mpfr_t Delta, mpfr_t S, mpfr_t P, cb_context context) {
     mpfr_t* realAxisResult = real_axis_result(epsilon, ell, Delta, S, P, context);
     mpfr_t* result = casimirExpander(realAxisResult, epsilon, ell, Delta, S, P, context);
-    for (unsigned long j = 0; j <= context.lambda; j++) {
+    for (long j = 0; j <= context.lambda; j++) {
         mpfr_clear(realAxisResult[j]);
     }
     free(realAxisResult);
@@ -587,7 +584,7 @@ mpfr_t* hBlock_times_rho_n(unsigned long n, mpfr_t epsilon, mpfr_t ell, mpfr_t D
     mpfr_set_si(result_in_rho[0], 0, context.rnd);
     mpfr_mul_ui(temp1, context.rho, 4, context.rnd);
     mpfr_pow_ui(temp1, temp1, n, context.rnd);
-    for (unsigned long j = 0; j <= context.n_Max; j++) {
+    for (long j = 0; j <= context.n_Max; j++) {
         mpfr_mul(hBlock[j], hBlock[j], temp1, context.rnd);
         mpfr_add(result_in_rho[0], result_in_rho[0], hBlock[j], context.rnd);
         if (j < context.n_Max) {
@@ -597,7 +594,7 @@ mpfr_t* hBlock_times_rho_n(unsigned long n, mpfr_t epsilon, mpfr_t ell, mpfr_t D
     for (int i = 1; i <= context.lambda; i++) {
         mpfr_init2(result_in_rho[i], context.prec);
         mpfr_set_si(result_in_rho[i], 0, context.rnd);
-        for (unsigned long j = 0; j <= context.n_Max; j++) {
+        for (long j = 0; j <= context.n_Max; j++) {
             mpfr_mul_si(hBlock[j], hBlock[j], n + j - i + 1, context.rnd);
             mpfr_add(result_in_rho[i], result_in_rho[i], hBlock[j], context.rnd);
         }
@@ -613,15 +610,15 @@ mpfr_t* hBlock_times_rho_n(unsigned long n, mpfr_t epsilon, mpfr_t ell, mpfr_t D
 
     free(hBlock);
     mpfr_t* result = malloc(sizeof(mpfr_t) * (context.lambda + 1));
-    for (unsigned long i = 0; i <= context.lambda; i++) {
+    for (long i = 0; i <= context.lambda; i++) {
         mpfr_init2(result[i], context.prec);
         mpfr_set_zero(result[i], 1);
-        for (unsigned long j = 0; j <= context.lambda; j++) {
+        for (long j = 0; j <= context.lambda; j++) {
             mpfr_mul(temp1, result_in_rho[j], context.rho_to_z_matrix[j + (context.lambda + 1) * i], MPFR_RNDN);
             mpfr_add(result[i], result[i], temp1, MPFR_RNDN);
         }
     }
-    for (unsigned long i = 0; i <= context.lambda; i++) {
+    for (long i = 0; i <= context.lambda; i++) {
         mpfr_clear(result_in_rho[i]);
     }
 
@@ -650,7 +647,7 @@ mpfr_t* h_asymptotic(mpfr_t epsilon, mpfr_t S, cb_context context) {
     mpfr_pow(firstFactor[0], temp2, temp1, context.rnd);
     /* firstFactor[0] = (1 + rho) ** (-1 - epsilon + 2 S)*/
     mpfr_ui_div(temp2, 1, temp2, context.rnd);
-    for (unsigned long j = 1; j <= context.lambda; j++) {
+    for (long j = 1; j <= context.lambda; j++) {
         mpfr_init2(firstFactor[j], context.prec);
         mpfr_add_si(temp3, temp1, -j + 1, context.rnd);
         mpfr_mul(firstFactor[j], firstFactor[j - 1], temp3, context.rnd);
@@ -668,7 +665,7 @@ mpfr_t* h_asymptotic(mpfr_t epsilon, mpfr_t S, cb_context context) {
     mpfr_pow(secondFactor[0], temp2, temp1, context.rnd);
     mpfr_ui_div(temp2, 1, temp2, context.rnd);
     mpfr_neg(temp2, temp2, context.rnd);
-    for (unsigned long j = 1; j <= context.lambda; j++) {
+    for (long j = 1; j <= context.lambda; j++) {
         mpfr_init2(secondFactor[j], context.prec);
         mpfr_add_si(temp3, temp1, -j + 1, context.rnd);
         mpfr_mul(secondFactor[j], secondFactor[j - 1], temp3, context.rnd);
@@ -678,18 +675,18 @@ mpfr_t* h_asymptotic(mpfr_t epsilon, mpfr_t S, cb_context context) {
 
     /* Convolve firstFactor and secondFactor */
     mpfr_t* result_in_rho = malloc(sizeof(mpfr_t) * (context.lambda + 1));
-    for (unsigned long j = 0; j <= context.lambda; j++) {
+    for (long j = 0; j <= context.lambda; j++) {
         mpfr_init2(result_in_rho[j], context.prec);
         mpfr_set_zero(result_in_rho[j], 1);
-        for (unsigned long k = 0; k <= j; k++) {
+        for (long k = 0; k <= j; k++) {
             mpfr_mul(temp1, firstFactor[k], secondFactor[j - k], context.rnd);
             mpfr_add(result_in_rho[j], result_in_rho[j], temp1, context.rnd);
         }
     }
-    for (unsigned long j = 0; j <= context.lambda; j++) {
+    for (long j = 0; j <= context.lambda; j++) {
         mpfr_clear(firstFactor[j]);
     };
-    for (unsigned long j = 0; j <= context.lambda; j++) {
+    for (long j = 0; j <= context.lambda; j++) {
         mpfr_clear(secondFactor[j]);
     };
     free(firstFactor);
@@ -699,13 +696,13 @@ mpfr_t* h_asymptotic(mpfr_t epsilon, mpfr_t S, cb_context context) {
     for (int i = 0; i <= context.lambda; i++) {
         mpfr_init2(result[i], context.prec);
         mpfr_set_zero(result[i], 1);
-        for (unsigned long j = 0; j <= context.lambda; j++) {
+        for (long j = 0; j <= context.lambda; j++) {
             mpfr_mul(temp1, result_in_rho[j], context.rho_to_z_matrix[j + (context.lambda + 1) * i], context.rnd);
             mpfr_add(result[i], result[i], temp1, context.rnd);
         }
     }
 
-    for (unsigned long i = 0; i <= context.lambda; i++) {
+    for (long i = 0; i <= context.lambda; i++) {
         mpfr_clear(result_in_rho[i]);
     }
 

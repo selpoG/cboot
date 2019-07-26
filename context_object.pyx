@@ -430,6 +430,8 @@ def pole_integral_c(x_power_max, base, pole_position, order_of_pole, prec):
             cython.cast(mpfr_t, cython.cast(RealNumber, a).value),
             cython.cast(mpfr_t, cython.cast(RealNumber, igamma).value),
             prec)
+    else:
+        raise RuntimeError("order_of_pole must be 1 or 2.")
     return result
 
 

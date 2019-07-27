@@ -1,6 +1,9 @@
 import cython
+cimport numpy as np
 
-from sage.libs.mpfr cimport mpfr_t, mpfr_prec_t
+from sage.libs.mpfr cimport (
+    mpfr_prec_t, mpfr_t, mpfr_init2, mpfr_set, mpfr_clear, mpfr_mul,
+    mpfr_add, mpfr_add_ui, mpfr_set_ui, MPFR_RNDN, mpfr_set_zero, mpfr_zero_p)
 from sage.rings.real_mpfr cimport RealField_class, RealNumber
 
 cdef extern from "stdlib.h":
@@ -25,8 +28,10 @@ cdef extern from "sage/cboot/context_variables.h":
     cb_context context_construct(long nMax, mpfr_prec_t prec, int Lambda)
     void clear_cb_context(cb_context context)
 
-@cython.locals(result=cython.pointer(mpfr_t))
+cdef cython.bint RealNumber_is_zero(RealNumber num)
 cdef mpfr_t* pole_integral_c(x_power_max, base, pole_position, order_of_pole, mpfr_prec_t prec)
+cpdef prefactor_integral(pole_data, base, int x_power, prec, c=*)
+cpdef anti_band_cholesky_inverse(v, n_order_max, prec)
 
 cdef class cb_universal_context(object):
     cdef cb_context c_context
@@ -47,7 +52,6 @@ cdef class cb_universal_context(object):
     cdef public object rho_to_delta
     cdef public object null_ftype
     cdef public object null_htype
-    @cython.locals(temp1=mpfr_t)
     cpdef pochhammer(self, x, unsigned long n)
 
 cdef class damped_rational(object):

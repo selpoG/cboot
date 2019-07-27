@@ -1,14 +1,14 @@
-from __future__ import absolute_import, division, print_function, unicode_literals
+from __future__ import (
+    absolute_import, division, print_function, unicode_literals)
 
 import copy
-import cython
 import re
 import sys
 from collections import Counter
 from functools import reduce
 
+import cython
 import numpy as np
-from sage.arith.misc import is_square
 from sage.functions.all import gamma
 from sage.functions.log import log
 from sage.functions.other import sqrt
@@ -18,13 +18,6 @@ from sage.rings.real_mpfr import RealField, RealNumber, RR
 
 if sys.version_info.major == 2:
     from future_builtins import ascii, filter, hex, map, oct, zip
-
-from libcpp cimport bool
-cimport numpy as np
-from sage.libs.mpfr cimport (
-    mpfr_prec_t, mpfr_t, mpfr_init2, mpfr_set, mpfr_clear, mpfr_mul,
-    mpfr_add, mpfr_add_ui, mpfr_set_ui, MPFR_RNDN, mpfr_set_zero)
-from sage.rings.real_mpfr cimport RealField_class
 
 
 def is_integer(x):
@@ -36,8 +29,16 @@ def is_integer(x):
         return True
 
 
+@cython.cfunc
+@cython.returns(cython.bint)
+@cython.locals(num=RealNumber)
+def RealNumber_is_zero(num):
+    return mpfr_zero_p(
+        cython.cast(mpfr_t, cython.cast(RealNumber, num).value)) != 0
+
+
 def get_dimG(Lambda):
-    # type: int -> int
+    # type: (int) -> int
     if Lambda % 2 != 0:
         return (Lambda + 1) * (Lambda + 3) // 4
     return ((Lambda + 2) ** 2) // 4
@@ -124,7 +125,7 @@ class cb_universal_context(object):
         # type: Function[[np.ndarray, RealNumber], np.ndarray]
         self.polynomial_vector_shift = np.vectorize(
             lambda x, shift: self.Delta_Field(x)(self.Delta + shift))
-        self.rho = 3 - 2 * self.field(2).sqrt()  # 3 - 2 sqrt(2)
+        self.rho = 3 - 2 * sqrt(self.field(2))  # 3 - 2 sqrt(2)
 
         self.zzbar_to_xy_marix = z_zbar_derivative_to_x_y_derivative_Matrix(
             self.Lambda, self.field)
@@ -141,12 +142,16 @@ class cb_universal_context(object):
         self.null_ftype = np.full(self.dim_f(), self.field(0))
         self.null_htype = np.full(self.dim_h(), self.field(0))
 
+    @staticmethod
+    def __triangle(n):
+        return int(n * (n + 1) // 2)
+
     # dim_f + dim_h = dim_G
     def dim_f(self):
-        return int(((self.Lambda + 1) // 2) * (((self.Lambda + 1) // 2) + 1) // 2)
+        return cb_universal_context.__triangle((self.Lambda + 1) // 2)
 
     def dim_h(self):
-        return int(((self.Lambda + 2) // 2) * (((self.Lambda + 2) // 2) + 1) // 2)
+        return cb_universal_context.__triangle((self.Lambda + 2) // 2)
 
     def __call__(self, x):
         """
@@ -156,7 +161,8 @@ class cb_universal_context(object):
         return self.field(x)
 
     def __repr__(self):
-        return "Conformal bootstrap context with Lambda = {0}, precision = {1}, nMax = {2}".format(self.Lambda, self.precision, self.maxExpansionOrder)
+        return "Conformal bootstrap context with Lambda = {0}, precision = {1}, nMax = {2}".format(
+            self.Lambda, self.precision, self.maxExpansionOrder)
 
     def identity_vector(self):
         res = np.concatenate([self.null_ftype, self.null_htype])
@@ -216,7 +222,9 @@ class cb_universal_context(object):
         return self.__F_matrix_impl(d, 0)
 
     def univariate_func_prod(self, x, y):
-        return np.array([x[0:i + 1].dot(y[i::-1]) for i in range(self.Lambda + 1)])
+        return np.array([
+            x[0:i + 1].dot(y[i::-1])
+            for i in range(self.Lambda + 1)])
 
     def SDP(self, normalization, objective, pvm):
         return SDP(normalization, objective, pvm, context=self)
@@ -387,23 +395,25 @@ class cb_universal_context(object):
         if isinstance(x, prefactor_numerator):
             if isinstance(y, prefactor_numerator):
                 pref = x.prefactor * y.prefactor
-                return prefactor_numerator(pref, np.dot(x.matrix, y.matrix), self)
+                return prefactor_numerator(
+                    pref, np.dot(x.matrix, y.matrix), self)
             return prefactor_numerator(x.prefactor, np.dot(x.matrix, y), self)
         else:
             if isinstance(y, prefactor_numerator):
-                return prefactor_numerator(y.prefactor, np.dot(x, y.matrix), self)
+                return prefactor_numerator(
+                    y.prefactor, np.dot(x, y.matrix), self)
             return np.dot(x, y)
 
 
 @cython.cfunc
 @cython.returns("mpfr_t*")
-@cython.locals(prec=mpfr_prec_t)
+@cython.locals(prec=mpfr_prec_t, result="mpfr_t*")
 def pole_integral_c(x_power_max, base, pole_position, order_of_pole, prec):
     a = RealField(2 * prec)(pole_position)
     b = RealField(2 * prec)(base)
     if a < 0:
         igamma = b ** a * gamma(0, a * log(b))
-    elif a == 0:
+    elif RealNumber_is_zero(a):
         igamma = RealField(prec)(prec)
     else:
         raise RuntimeError("A pole exists in the prefactor")
@@ -438,14 +448,13 @@ def pole_integral_c(x_power_max, base, pole_position, order_of_pole, prec):
 @cython.ccall
 @cython.locals(
     x_power=cython.int, n=cython.int, number_of_factors=cython.int,
-    count=cython.int, pole_data_to_c="mpfr_t*", is_double="int*",
+    pole_data_to_c="mpfr_t*", is_double="int*",
     temp1=mpfr_t, temp2=mpfr_t, temp_mpfrs="mpfr_t*")
 def prefactor_integral(pole_data, base, x_power, prec, c=1):
     field = RealField(prec)
     n = len(pole_data)
     number_of_factors = sum([x[1] for x in pole_data])
 
-    count = 0
     index_list = []
     for i, pole in enumerate(pole_data):
         if field(pole[0]) > 0:
@@ -472,7 +481,6 @@ def prefactor_integral(pole_data, base, x_power, prec, c=1):
     is_double = cython.cast(
         "int*", calloc(len(pole_data), cython.sizeof(int)))
 
-    base_c = field(base)
     for i in range(n):
         r = field(pole_data[i][0])
         mpfr_init2(pole_data_to_c[i], prec)
@@ -591,7 +599,8 @@ def max_index(v):
 
 
 def normalizing_component_subtract(m, normalizing_vector):
-    assert isinstance(normalizing_vector, np.ndarray), "normalizing_vector must be np.ndarray, but is {0}".format(
+    assert isinstance(
+        normalizing_vector, np.ndarray), "normalizing_vector must be np.ndarray, but is {0}".format(
         type(normalizing_vector))
     if len(m) != len(normalizing_vector):
         raise RuntimeError(
@@ -667,7 +676,8 @@ def write_polynomial_vector(file_stream, polynomialVector):
 
 
 def laguerre_sample_points(n, field, rho):
-    return [field(3.141592) ** 2 * (-1 + 4 * k) ** 2 / (-64 * n * log(4 * rho)) for k in range(n)]
+    return [field(3.141592) ** 2 * (-1 + 4 * k) ** 2 / (-64 * n * log(4 * rho))
+            for k in range(n)]
 
 
 def __map_keys(d, f):
@@ -676,7 +686,8 @@ def __map_keys(d, f):
 
 def format_poleinfo(poles, context=None):
     if context is None:
-        def field(x): return x
+        def field(x):
+            return x
     else:
         field = context.field
     if len(poles) == 0:
@@ -713,8 +724,8 @@ class damped_rational(object):
     def shift(self, shift):
         # type: (RealNumber) -> damped_rational
         new_poles = [[x - shift, self.__poles[x]] for x in self.__poles]
-        new_const = self.__pref_constant * self.__base ** shift
-        return damped_rational(new_poles, self.__base, new_const, self.__context)
+        new_c = self.__pref_constant * self.__base ** shift
+        return damped_rational(new_poles, self.__base, new_c, self.__context)
 
     # evaluate f(x)
     def __call__(self, x):
@@ -722,11 +733,18 @@ class damped_rational(object):
 
     # evaluate denominator of f(x)
     def denom(self, x):
-        return reduce(lambda z, w: z * w, [(x - y) ** self.__poles[y] for y in self.__poles], 1 / self.__pref_constant)
+        return reduce(
+            lambda z, w: z * w,
+            [(x - y) ** self.__poles[y] for y in self.__poles],
+            1 / self.__pref_constant)
 
     def orthogonal_polynomial(self, order):
         passed_poles = [[x, self.__poles[x]] for x in self.__poles]
-        return anti_band_cholesky_inverse(prefactor_integral(passed_poles, self.__base, order, self.__context.precision, self.__pref_constant), order // 2, self.__context.precision)
+        return anti_band_cholesky_inverse(
+            prefactor_integral(
+                passed_poles, self.__base, order,
+                self.__context.precision, self.__pref_constant),
+            order // 2, self.__context.precision)
 
     @staticmethod
     def from_poleinfo(poles, context):
@@ -734,7 +752,8 @@ class damped_rational(object):
 
     @staticmethod
     def poles_max(poles_list):
-        # type: (Iterable[Union[damped_rational, Dict[RealNumber, int]]]) -> Dict[RealNumber, int]
+        # type: (Iterable[Union[damped_rational, Dict[RealNumber, int]]]) ->
+        # Dict[RealNumber, int]
         ans = dict()
         for p in poles_list:
             if isinstance(p, damped_rational):
@@ -782,7 +801,8 @@ class damped_rational(object):
 
     @staticmethod
     def poles_subtract(poles, poles_list):
-        # type: (Dict[RealNumber, int], Iterable[Dict[RealNumber, int]]) -> Dict[RealNumber, int]
+        # type: (Dict[RealNumber, int], Iterable[Dict[RealNumber, int]]) ->
+        # Dict[RealNumber, int]
         ans = copy.copy(poles)
         for p in poles_list:
             if isinstance(p, damped_rational):
@@ -824,7 +844,8 @@ class damped_rational(object):
 
     # this method does not change self
     def add_poles(self, location):
-        # type: (Union[Dict[RealNumber, int], List[RealNumber], List[Tuple[RealNumber, int]]]) -> damped_rational
+        # type: (Union[Dict[RealNumber, int], List[RealNumber],
+        # List[Tuple[RealNumber, int]]]) -> damped_rational
         res_poles = damped_rational.poles_add(
             (self.__poles, format_poleinfo(location)))
         return damped_rational(
@@ -836,19 +857,17 @@ class damped_rational(object):
             raise TypeError("lcm supported only between damped_rationals")
         if self.__base != p.__base:
             raise RuntimeError("two damped-rational must have the same base!")
-        # if p == self:
-            # return self
 
         return damped_rational(
             damped_rational.poles_max((self.__poles, p.__poles)),
-            self.__base, self.__pref_constant * p.__pref_constant, self.__context)
+            self.__base,
+            self.__pref_constant * p.__pref_constant,
+            self.__context)
 
     def gcd(self, p):
         # type: (dampled_rational) -> damped_rational
         if not isinstance(p, damped_rational):
             raise TypeError("gcd supported only between damped_rationals")
-        # if p == self:
-            # return self
 
         return damped_rational(
             damped_rational.poles_min((self.__poles, p.__poles)),
@@ -863,7 +882,8 @@ class damped_rational(object):
             if self.__poles[x] != 1:
                 output += "**" + repr(self.__poles[x])
             return output
-        return "{0}*({1})**Delta / ({2})".format(repr(self.__pref_constant), repr(self.__base), "*".join(pole_str(x) for x in self.__poles))
+        return "{0}*({1})**Delta / ({2})".format(repr(self.__pref_constant),
+                                                 repr(self.__base), "*".join(pole_str(x) for x in self.__poles))
 
 
 @cython.cclass
@@ -884,7 +904,10 @@ class positive_matrix_with_prefactor(object):
             self.context.polynomial_vector_shift(self.matrix, x), self.context)
 
     def degree_max(self):
-        return max((np.vectorize(lambda y: self.context.Delta_Field(y).degree())(self.matrix)).flatten())
+        return max(
+            (np.vectorize(
+                lambda y: self.context.Delta_Field(y).degree())(
+                self.matrix)).flatten())
 
     def normalization_subtract(self, v):
         return normalizing_component_subtract(self.matrix, v)
@@ -922,7 +945,8 @@ class positive_matrix_with_prefactor(object):
         file_stream.write("</polynomialVectorMatrix>\n")
 
     def reshape(self, shape=None):
-        if len(self.matrix.shape) == 3 and self.matrix.shape[0] == self.matrix.shape[1] and shape is None:
+        if len(
+                self.matrix.shape) == 3 and self.matrix.shape[0] == self.matrix.shape[1] and shape is None:
             return self
         if shape is None:
             shape = (1, 1, self.matrix.shape[-1])
@@ -938,10 +962,16 @@ class prefactor_numerator(positive_matrix_with_prefactor):
         return prefactor_numerator(new_pref, self.matrix, self.context)
 
     def rdot(self, M):
-        return prefactor_numerator(self.prefactor, M.dot(self.matrix), self.context)
+        return prefactor_numerator(
+            self.prefactor, M.dot(self.matrix), self.context)
 
     def shift(self, x):
-        return prefactor_numerator(self.prefactor.shift(x), self.context.polynomial_vector_shift(self.matrix, x), self.context)
+        return prefactor_numerator(
+            self.prefactor.shift(x),
+            self.context.polynomial_vector_shift(
+                self.matrix,
+                x),
+            self.context)
 
     def multiply_factored_polynomial(self, factors, C):
         """
@@ -955,7 +985,12 @@ class prefactor_numerator(positive_matrix_with_prefactor):
         new_pref = self.prefactor.div(gcd)
         div = div.div(gcd)
         # division by div is equivalent to multiplication by div.denom
-        return prefactor_numerator(new_pref, div.denom(self.context.Delta) * self.matrix, self.context)
+        return prefactor_numerator(
+            new_pref,
+            div.denom(
+                self.context.Delta) *
+            self.matrix,
+            self.context)
 
     def multiply_factored_rational(self, poles, factors, C):
         return self.add_poles(poles).multiply_factored_polynomial(factors, C)
@@ -979,10 +1014,18 @@ class prefactor_numerator(positive_matrix_with_prefactor):
         return prefactor_numerator(self.prefactor, -self.matrix, self.context)
 
     def __div__(self, x):
-        return prefactor_numerator(self.prefactor, self.matrix / self.context(x), self.context)
+        return prefactor_numerator(
+            self.prefactor,
+            self.matrix /
+            self.context(x),
+            self.context)
 
     def __truediv__(self, x):
-        return prefactor_numerator(self.prefactor, self.matrix / self.context(x), self.context)
+        return prefactor_numerator(
+            self.prefactor,
+            self.matrix /
+            self.context(x),
+            self.context)
 
     def __add__(self, other):
         if not isinstance(other, prefactor_numerator):
@@ -1045,8 +1088,10 @@ class SDP(object):
     def write(self, file_path):
         with open(file_path, 'w') as file_stream:
             file_stream.write("<sdp>\n")
-            write_vector(file_stream, "objective", normalizing_component_subtract(
-                self.objective, self.normalization))
+            write_vector(
+                file_stream, "objective",
+                normalizing_component_subtract(
+                    self.objective, self.normalization))
             file_stream.write("<polynomialVectorMatrices>\n")
             for x in self.pvm:
                 x.write(file_stream, self.normalization)

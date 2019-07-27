@@ -160,9 +160,15 @@ class cb_universal_context(object):
         """
         return self.field(x)
 
+    def __str__(self):
+        return "Conformal bootstrap context with " \
+            "Lambda = {0}, precision = {1}, nMax = {2}".format(
+                self.Lambda, self.precision, self.maxExpansionOrder)
+
     def __repr__(self):
-        return "Conformal bootstrap context with Lambda = {0}, precision = {1}, nMax = {2}".format(
-            self.Lambda, self.precision, self.maxExpansionOrder)
+        return "cb_universal_context(Lambda={0}, Prec={1}, nMax={2})".format(
+            repr(self.Lambda), repr(self.precision),
+            repr(self.maxExpansionOrder))
 
     def identity_vector(self):
         res = np.concatenate([self.null_ftype, self.null_htype])
@@ -642,7 +648,7 @@ def efm_from_sdpb_output(file_path, normalizing_vector, context):
 def write_real_num(file_stream, real_num, tag):
     # type: (io.TextIOWrapper, str, Union[RealNumber, int])
     file_stream.write(("<" + tag + ">"))
-    file_stream.write(repr(real_num))
+    file_stream.write(str(real_num))
     file_stream.write(("</" + tag + ">\n"))
 
 
@@ -873,17 +879,23 @@ class damped_rational(object):
             damped_rational.poles_min((self.__poles, p.__poles)),
             1, 1, self.__context)
 
-    def __repr__(self):
+    def __str__(self):
         def pole_str(x):
             output = "(Delta"
             if x != 0:
-                output += "{0}{1}".format("-" if x > 0 else "+", repr(abs(x)))
+                output += "{0}{1}".format("-" if x > 0 else "+", abs(x))
             output += ")"
             if self.__poles[x] != 1:
-                output += "**" + repr(self.__poles[x])
+                output += "**" + str(self.__poles[x])
             return output
-        return "{0}*({1})**Delta / ({2})".format(repr(self.__pref_constant),
-                                                 repr(self.__base), "*".join(pole_str(x) for x in self.__poles))
+        return "{0}*({1})**Delta / ({2})".format(
+            self.__pref_constant, self.__base,
+            "*".join(pole_str(x) for x in self.__poles))
+
+    def __repr__(self):
+        return "damped_rational(poles={0}, base={1}, c={2}, context={3})".format(
+            repr(self.__poles), repr(self.__base),
+            repr(self.__pref_constant), repr(self.__context))
 
 
 @cython.cclass
@@ -926,10 +938,10 @@ class positive_matrix_with_prefactor(object):
 
         file_stream.write("<polynomialVectorMatrix>\n")
         file_stream.write("<rows>\n")
-        file_stream.write(repr(len(shuffled_matrix)))
+        file_stream.write(str(len(shuffled_matrix)))
         file_stream.write("</rows>\n")
         file_stream.write("<cols>\n")
-        file_stream.write(repr(len(shuffled_matrix[0])))
+        file_stream.write(str(len(shuffled_matrix[0])))
         file_stream.write("</cols>\n")
         file_stream.write("<elements>\n")
         for x in shuffled_matrix:
@@ -952,6 +964,14 @@ class positive_matrix_with_prefactor(object):
             shape = (1, 1, self.matrix.shape[-1])
         new_b = self.matrix.reshape(shape)
         return prefactor_numerator(self.prefactor, new_b, self.context)
+
+    def __str__(self):
+        return "{0}\n*{1}".format(self.prefactor, self.matrix)
+
+    def __repr__(self):
+        return "{0}(prefactor={1}, matrix={2}, context={2})".format(
+                type(self).__name__,
+                repr(self.prefactor), repr(self.matrix), repr(self.context))
 
 
 @cython.cclass
@@ -1045,9 +1065,6 @@ class prefactor_numerator(positive_matrix_with_prefactor):
         pref = self.prefactor(x)
         body = self.context.polynomial_vector_evaluate(self.matrix, x)
         return pref * body
-
-    def __repr__(self):
-        return repr(self.prefactor) + "\n*" + repr(self.matrix)
 
 
 def find_local_minima(pol, label, field=RR, context=None):

@@ -369,6 +369,18 @@ class scalar_cb_context_generic(cb_universal_context):
             approximate_poles=approximate_poles).approx()
         return g
 
+    def __str__(self):
+        return "Conformal bootstrap scalar context in " \
+            "{0} dimensional space-time with " \
+            "Lambda = {1}, precision = {2}, nMax = {3}".format(
+                float(2 + 2 * self.epsilon),
+                self.Lambda, self.precision, self.maxExpansionOrder)
+
+    def __repr__(self):
+        return "scalar_cb_context_generic" \
+            "(Lambda={0}, Prec={1}, nMax={2}, epsilon={3})".format(
+            repr(self.Lambda), repr(self.precision),
+            repr(self.maxExpansionOrder), repr(self.epsilon))
 
 class poleData(object):
     """
@@ -723,6 +735,17 @@ class scalar_cb_2d_context(scalar_cb_context_generic):
             self, cutoff, ell, Delta_1_2, Delta_3_4,
             is_correlator_multiple, approximate_poles)
 
+    def __str__(self):
+        return "Conformal bootstrap scalar context in " \
+            "two dimensional space-time with " \
+            "Lambda = {0}, precision = {1}, nMax = {2}".format(
+                self.Lambda, self.precision, self.maxExpansionOrder)
+
+    def __repr__(self):
+        return "scalar_cb_2d_context" \
+            "(Lambda={0}, Prec={1}, nMax={2})".format(
+                repr(self.Lambda), repr(self.precision),
+                repr(self.maxExpansionOrder))
 
 @cython.cclass
 class scalar_cb_4d_context(scalar_cb_context_generic):
@@ -761,6 +784,17 @@ class scalar_cb_4d_context(scalar_cb_context_generic):
             self, cutoff, ell, Delta_1_2, Delta_3_4,
             is_correlator_multiple, approximate_poles)
 
+    def __str__(self):
+        return "Conformal bootstrap scalar context in " \
+            "four dimensional space-time with " \
+            "Lambda = {0}, precision = {1}, nMax = {2}".format(
+                self.Lambda, self.precision, self.maxExpansionOrder)
+
+    def __repr__(self):
+        return "scalar_cb_4d_context" \
+            "(Lambda={0}, Prec={1}, nMax={2})".format(
+                repr(self.Lambda), repr(self.precision),
+                repr(self.maxExpansionOrder))
 
 class g_rational_approx_data_four_d(object):
     def __init__(self, context, cutoff, ell, Delta_1_2, Delta_3_4,

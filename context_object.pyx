@@ -9,6 +9,8 @@ from functools import reduce
 
 import cython
 import numpy as np
+
+from sage.arith.misc import rising_factorial
 from sage.functions.all import gamma
 from sage.functions.log import log
 from sage.functions.other import sqrt
@@ -234,30 +236,9 @@ class cb_universal_context(object):
         return prefactor_numerator(pref, array, self)
 
     @cython.ccall
-    @cython.locals(n="unsigned long", temp1=mpfr_t)
+    @cython.locals(n="unsigned long", temp=mpfr_t)
     def pochhammer(self, x, n):
-        x_c = self.field(x)
-        mpfr_init2(temp1, self.precision)
-        result = cython.cast(
-            RealNumber, cython.cast(RealField_class, self.field)._new())
-        cython.cast(RealNumber, result)._parent = self.field
-        mpfr_init2(
-            cython.cast(mpfr_t, cython.cast(RealNumber, result).value),
-            self.precision)
-        mpfr_set_ui(
-            cython.cast(mpfr_t, cython.cast(RealNumber, result).value),
-            1, MPFR_RNDN)
-        for j in range(n):
-            mpfr_add_ui(
-                temp1,
-                cython.cast(mpfr_t, cython.cast(RealNumber, x_c).value),
-                j, MPFR_RNDN)
-            mpfr_mul(
-                cython.cast(mpfr_t, cython.cast(RealNumber, result).value),
-                cython.cast(mpfr_t, cython.cast(RealNumber, result).value),
-                temp1, MPFR_RNDN)
-        mpfr_clear(temp1)
-        return result
+        return rising_factorial(self(x), n)
 
     def vector_to_prefactor_numerator(self, vector):
         """

@@ -29,14 +29,6 @@ def is_integer(x):
         return True
 
 
-@cython.cfunc
-@cython.returns(cython.bint)
-@cython.locals(num=RealNumber)
-def RealNumber_is_zero(num):
-    return mpfr_zero_p(
-        cython.cast(mpfr_t, cython.cast(RealNumber, num).value)) != 0
-
-
 def get_dimG(Lambda):
     # type: (int) -> int
     if Lambda % 2 != 0:
@@ -269,9 +261,9 @@ class cb_universal_context(object):
 
     def vector_to_prefactor_numerator(self, vector):
         """
-        Convert a constant (i.e., non-polynomial) vector into positive_matrix_with_prefactor.
+        Convert a constant (i.e., non-polynomial) vector into prefactor_numerator.
         """
-        pref = self.damped_rational([], 1)
+        pref = self.damped_rational([])
         return self.prefactor_numerator(pref, vector)
 
     def join(self, l):
@@ -413,137 +405,105 @@ class cb_universal_context(object):
 
 @cython.cfunc
 @cython.returns("mpfr_t*")
-@cython.locals(prec=mpfr_prec_t, result="mpfr_t*")
-def pole_integral_c(x_power_max, base, pole_position, order_of_pole, prec):
-    a = RealField(2 * prec)(pole_position)
-    b = RealField(2 * prec)(base)
+@cython.locals(prec=mpfr_prec_t)
+def __pole_integral_c(x_power_max, base, pole_position, is_double, prec):
+    field = RealField(prec)
+    field2 = RealField(2 * prec)
+    a = field2(pole_position)
+    b = field2(base)
     if a < 0:
         igamma = b ** a * gamma(0, a * log(b))
-    elif RealNumber_is_zero(a):
-        igamma = RealField(prec)(prec)
     else:
-        raise RuntimeError("A pole exists in the prefactor")
-    if not igamma.is_real():
-        raise RuntimeError(
-            "Integral not real ... perhaps a mistake in pole data.")
-    igamma = RealField(prec)(igamma)  # incomplete gamma
-
-    field = RealField(prec)
+        igamma = prec
+    igamma = field(igamma)  # incomplete gamma
     a = field(pole_position)
     b = field(base)
-
-    if order_of_pole == 1:
-        result = simple_pole_case_c(
+    if is_double != 0:
+        return double_pole_case_c(
             cython.cast(long, x_power_max),
             cython.cast(mpfr_t, cython.cast(RealNumber, b).value),
             cython.cast(mpfr_t, cython.cast(RealNumber, a).value),
             cython.cast(mpfr_t, cython.cast(RealNumber, igamma).value),
             prec)
-    elif order_of_pole == 2:
-        result = double_pole_case_c(
-            cython.cast(long, x_power_max),
-            cython.cast(mpfr_t, cython.cast(RealNumber, b).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, a).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, igamma).value),
-            prec)
-    else:
-        raise RuntimeError("order_of_pole must be 1 or 2.")
-    return result
+    return simple_pole_case_c(
+        cython.cast(long, x_power_max),
+        cython.cast(mpfr_t, cython.cast(RealNumber, b).value),
+        cython.cast(mpfr_t, cython.cast(RealNumber, a).value),
+        cython.cast(mpfr_t, cython.cast(RealNumber, igamma).value),
+        prec)
 
 
 @cython.ccall
 @cython.locals(
     x_power=cython.int, n=cython.int, number_of_factors=cython.int,
-    pole_data_to_c="mpfr_t*", is_double="int*",
-    temp1=mpfr_t, temp2=mpfr_t, temp_mpfrs="mpfr_t*")
-def prefactor_integral(pole_data, base, x_power, prec, c=1):
+    c_pole_data="mpfr_t*", is_double="int*", temp_mpfrs="mpfr_t*")
+def __prefactor_integral(pole_data, base, x_power, prec, c=1):
+    # type: (Dict[RealNumber, int], RealNumber, Integer, int, RealNumber) -> np.ndarray
     field = RealField(prec)
     n = len(pole_data)
-    number_of_factors = sum([x[1] for x in pole_data])
-
-    index_list = []
-    for i, pole in enumerate(pole_data):
-        if field(pole[0]) > 0:
-            raise NotImplementedError(
-                "There exists a pole on the integration contour of the prefactor!")
-        if pole[1] == 1:
-            index_list.append([i, 1])
-        elif pole[1] == 2:
-            index_list.append([i, 2])
-            index_list.append([i, 1])
-        else:
-            raise NotImplementedError
+    number_of_factors = n
+    assert 0 < base < 1, "base must be in (0,1), but is {0}".format(base)
     if n == 0:
-        minus_ln_b = -1 / log(RealField(prec)(base))
+        minus_ln_b = -1 / log(base)
         result = np.ndarray(x_power + 1, dtype='O')
-        result[0] = minus_ln_b * RealField(prec)(c)
+        result[0] = minus_ln_b * c
         for i in range(1, x_power + 1):
             result[i] = result[i - 1] * minus_ln_b * i
         return result
-    pole_data_to_c = cython.cast(
-        "mpfr_t*", calloc(len(pole_data), cython.sizeof(mpfr_t)))
-    if pole_data_to_c == NULL:
-        raise NotImplementedError
-    is_double = cython.cast(
-        "int*", calloc(len(pole_data), cython.sizeof(int)))
 
-    for i in range(n):
-        r = field(pole_data[i][0])
-        mpfr_init2(pole_data_to_c[i], prec)
-        mpfr_set(
-            pole_data_to_c[i],
-            cython.cast(mpfr_t, cython.cast(RealNumber, r).value), MPFR_RNDN)
-        if pole_data[i][1] == 2:
+    index_list = []
+    c_pole_data = cython.cast("mpfr_t*", calloc(n, cython.sizeof(mpfr_t)))
+    is_double = cython.cast("int*", calloc(n, cython.sizeof(int)))
+    for i, pole in enumerate(pole_data):
+        if pole > 0:
+            raise ArithmeticError(
+                "There exists a pole on the integration contour of the prefactor!")
+        if pole_data[pole] == 2:
+            index_list.append([pole, 1])
             is_double[i] = 1
-        else:
-            is_double[i] = 0
-    decompose_coeffs = fast_partial_fraction_c(
-        pole_data_to_c, is_double, n, prec)
+            number_of_factors += 1
+        elif pole_data[pole] != 1:
+            raise NotImplementedError
+        index_list.append([pole, 0])
 
-    for i, _ in enumerate(pole_data):
-        mpfr_clear(pole_data_to_c[i])
+        mpfr_init2(c_pole_data[i], prec)
+        mpfr_set(
+            c_pole_data[i],
+            cython.cast(mpfr_t, cython.cast(RealNumber, pole).value), MPFR_RNDN)
 
-    free(pole_data_to_c)
+    decompose_coeffs = fast_partial_fraction_c(c_pole_data, is_double, n, prec)
+    for i in range(n):
+        mpfr_clear(c_pole_data[i])
+    free(c_pole_data)
     free(is_double)
 
-    mpfr_init2(temp1, prec)
-    mpfr_init2(temp2, prec)
     result = np.ndarray(x_power + 1, dtype='O')
     for i in range(x_power + 1):
-        result[i] = cython.cast(
-            RealNumber, cython.cast(RealField_class, field)._new())
-        mpfr_init2(
-            cython.cast(mpfr_t, cython.cast(RealNumber, result[i]).value), prec)
-        mpfr_set_zero(
-            cython.cast(mpfr_t, cython.cast(RealNumber, result[i]).value), 1)
-        cython.cast(RealNumber, result[i])._parent = field
+        result[i] = field(0)
 
     for i in range(number_of_factors):
-        temp_mpfrs = pole_integral_c(
-            x_power, base,
-            pole_data[index_list[i][0]][0], index_list[i][1], prec)
-
+        temp_mpfrs = __pole_integral_c(
+            x_power, base, index_list[i][0], index_list[i][1], prec)
         for j in range(x_power + 1):
-            mpfr_mul(
-                temp1, decompose_coeffs[i], temp_mpfrs[j], MPFR_RNDN)
-            mpfr_add(
+            mpfr_fma(
                 cython.cast(mpfr_t, cython.cast(RealNumber, result[j]).value),
+                decompose_coeffs[i], temp_mpfrs[j],
                 cython.cast(mpfr_t, cython.cast(RealNumber, result[j]).value),
-                temp1, MPFR_RNDN)
+                MPFR_RNDN)
             mpfr_clear(temp_mpfrs[j])
         free(temp_mpfrs)
 
     for i in range(number_of_factors):
         mpfr_clear(decompose_coeffs[i])
     free(decompose_coeffs)
-    return RealField(prec)(c) * result
+    return c * result
 
 
 @cython.ccall
 @cython.locals(
     anti_band_input="mpfr_t*", anti_band_mat="mpfr_t*",
     cholesky_decomposed="mpfr_t*", inversed="mpfr_t*")
-def anti_band_cholesky_inverse(v, n_order_max, prec):
+def __anti_band_cholesky_inverse(v, n_order_max, prec):
     field = RealField(prec)
     n_max = int(n_order_max)
     if not isinstance(n_max, int):
@@ -605,43 +565,41 @@ def max_index(v):
 
 
 def normalizing_component_subtract(m, normalizing_vector):
-    assert isinstance(
-        normalizing_vector, np.ndarray), "normalizing_vector must be np.ndarray, but is {0}".format(
-        type(normalizing_vector))
+    # type: (np.ndarray, np.ndarray) -> np.ndarray
     if len(m) != len(normalizing_vector):
         raise RuntimeError(
             "length of normalizing vector and target object must be equal.")
-    __index = max_index(normalizing_vector)
-    __deleted_normalizing_vector = (
-        1 / normalizing_vector[__index]) * np.delete(normalizing_vector, __index)
+    ind = max_index(normalizing_vector)
+    val = 1 / normalizing_vector[ind]
+    deleted_normalizing_vector = val * np.delete(normalizing_vector, ind)
     return np.insert(
-        np.delete(m, __index, 0) - __deleted_normalizing_vector * m[__index],
-        0,
-        m[__index] / normalizing_vector[__index])
+        np.delete(m, ind, 0) - deleted_normalizing_vector * m[ind],
+        0, m[ind] * val)
 
 
 def recover_functional(alpha, normalizing_vector):
-    __index = max_index(normalizing_vector)
-    __deleted_normalizing_vector = (
-        1 / normalizing_vector[__index]) * np.delete(normalizing_vector, __index)
-    if len(alpha) != (len(normalizing_vector) - 1):
+    # type: (np.ndarray, np.ndarray) -> np.ndarray
+    if len(alpha) != len(normalizing_vector) - 1:
         raise RuntimeError(
             "length of normalizing vector and target object must be equal.")
-    alpha_deleted = (
-        1 / normalizing_vector[__index]) - alpha.dot(__deleted_normalizing_vector)
-    return np.insert(alpha, __index, alpha_deleted)
+    ind = max_index(normalizing_vector)
+    val = 1 / normalizing_vector[ind]
+    deleted_normalizing_vector = val * np.delete(normalizing_vector, ind)
+    alpha_deleted = val - alpha.dot(deleted_normalizing_vector)
+    return np.insert(alpha, ind, alpha_deleted)
 
 
 find_y = re.compile(r'y *= *\{([^\}]+)\}')
 
 
 def efm_from_sdpb_output(file_path, normalizing_vector, context):
+    # type: (str, np.ndarray, cb_universal_context) -> np.ndarray
     data_stream = open(file_path)
     data_text = data_stream.read()
     data_stream.close()
     yres_text = find_y.search(data_text).groups()[0]
     vector_text = re.split(r', ', yres_text)
-    y_result = np.array([context.field(x) for x in vector_text])
+    y_result = np.array([context(x) for x in vector_text])
     return recover_functional(y_result, normalizing_vector)
 
 
@@ -695,13 +653,13 @@ def format_poleinfo(poles, context=None):
         def field(x):
             return x
     else:
-        field = context.field
+        field = context
     if len(poles) == 0:
         return dict()
     if isinstance(poles, dict):
         return __map_keys(poles, field)
     if isinstance(poles, list):
-        if not isinstance(poles[0], list):
+        if not isinstance(poles[0], (list, tuple)):
             return __map_keys(Counter(poles), field)
         if len(poles[0]) == 2:
             return {field(x[0]): x[1] for x in poles}
@@ -717,8 +675,8 @@ class damped_rational(object):
 
     @cython.locals(context=cb_universal_context)
     def __cinit__(self, poles, base, c, context):
-        self.__base = context.field(base)  # type: RealNumber
-        self.__pref_constant = context.field(c)  # type: RealNumber
+        self.__base = context(base)  # type: RealNumber
+        self.__pref_constant = context(c)  # type: RealNumber
         self.__context = context  # type: RealField_class
 
     @cython.locals(context=cb_universal_context)
@@ -729,7 +687,7 @@ class damped_rational(object):
     # return new rational g(Delta), where f(Delta + shift) = g(Delta)
     def shift(self, shift):
         # type: (RealNumber) -> damped_rational
-        new_poles = [[x - shift, self.__poles[x]] for x in self.__poles]
+        new_poles = {x - shift: self.__poles[x] for x in self.__poles}
         new_c = self.__pref_constant * self.__base ** shift
         return damped_rational(new_poles, self.__base, new_c, self.__context)
 
@@ -745,10 +703,9 @@ class damped_rational(object):
             1 / self.__pref_constant)
 
     def orthogonal_polynomial(self, order):
-        passed_poles = [[x, self.__poles[x]] for x in self.__poles]
-        return anti_band_cholesky_inverse(
-            prefactor_integral(
-                passed_poles, self.__base, order,
+        return __anti_band_cholesky_inverse(
+            __prefactor_integral(
+                self.__poles, self.__base, order,
                 self.__context.precision, self.__pref_constant),
             order // 2, self.__context.precision)
 
@@ -899,7 +856,7 @@ class damped_rational(object):
 
 
 @cython.cclass
-class positive_matrix_with_prefactor(object):
+class prefactor_numerator(object):
 
     @cython.locals(prefactor=damped_rational, context=cb_universal_context)
     def __cinit__(self, prefactor, matrix, context):
@@ -911,7 +868,7 @@ class positive_matrix_with_prefactor(object):
         self.matrix = matrix
 
     def shift(self, x):
-        return positive_matrix_with_prefactor(
+        return prefactor_numerator(
             self.prefactor.shift(x),
             self.context.polynomial_vector_shift(self.matrix, x), self.context)
 
@@ -921,16 +878,13 @@ class positive_matrix_with_prefactor(object):
                 lambda y: self.context.Delta_Field(y).degree())(
                 self.matrix)).flatten())
 
-    def normalization_subtract(self, v):
-        return normalizing_component_subtract(self.matrix, v)
-
     def write(self, file_stream, v):
         shuffled_matrix = np.array(
             [
                 [normalizing_component_subtract(y, v) for y in x]
                 for x in self.matrix])
         sample_points = laguerre_sample_points(
-            self.degree_max() + 1, self.context.field, self.context.rho)
+            self.degree_max() + 1, self.context, self.context.rho)
         sample_scalings = map(self.prefactor, sample_points)
         orthogonal_polynomial_vector = map(
             self.context.Delta_Field,
@@ -956,26 +910,20 @@ class positive_matrix_with_prefactor(object):
         file_stream.write("</bilinearBasis>\n")
         file_stream.write("</polynomialVectorMatrix>\n")
 
-    def reshape(self, shape=None):
+    def reshape(self):
         if len(
-                self.matrix.shape) == 3 and self.matrix.shape[0] == self.matrix.shape[1] and shape is None:
+                self.matrix.shape) == 3 and self.matrix.shape[0] == self.matrix.shape[1]:
             return self
-        if shape is None:
-            shape = (1, 1, self.matrix.shape[-1])
-        new_b = self.matrix.reshape(shape)
+        new_b = self.matrix.reshape((1, 1, self.matrix.shape[-1]))
         return prefactor_numerator(self.prefactor, new_b, self.context)
 
     def __str__(self):
         return "{0}\n*{1}".format(self.prefactor, self.matrix)
 
     def __repr__(self):
-        return "{0}(prefactor={1}, matrix={2}, context={2})".format(
-                type(self).__name__,
+        return "prefactor_numerator" \
+            "(prefactor={0}, matrix={1}, context={2})".format(
                 repr(self.prefactor), repr(self.matrix), repr(self.context))
-
-
-@cython.cclass
-class prefactor_numerator(positive_matrix_with_prefactor):
 
     def add_poles(self, poles):
         new_pref = self.prefactor.add_poles(poles)
@@ -984,14 +932,6 @@ class prefactor_numerator(positive_matrix_with_prefactor):
     def rdot(self, M):
         return prefactor_numerator(
             self.prefactor, M.dot(self.matrix), self.context)
-
-    def shift(self, x):
-        return prefactor_numerator(
-            self.prefactor.shift(x),
-            self.context.polynomial_vector_shift(
-                self.matrix,
-                x),
-            self.context)
 
     def multiply_factored_polynomial(self, factors, C):
         """
@@ -1094,7 +1034,7 @@ class SDP(object):
             pvm,
             context=None):
         self.pvm = [x.reshape()
-                    if isinstance(x, (positive_matrix_with_prefactor, prefactor_numerator))
+                    if isinstance(x, prefactor_numerator)
                     else
                     context.vector_to_prefactor_numerator(x).reshape()
                     for x in pvm]

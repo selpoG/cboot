@@ -4,10 +4,10 @@ from cysignals.signals cimport sig_on, sig_off
 from sage.rings.real_mpfr cimport RealField_class, RealNumber
 from sage.libs.mpfr cimport (
     mpfr_clear, mpfr_init2, mpfr_prec_t,
-    MPFR_RNDN, mpfr_set, mpfr_t)
+    MPFR_RNDN, mpfr_set, mpfr_t, mpfr_zero_p)
 
 from sage.cboot.context_object cimport (
-    cb_context, cb_universal_context, RealNumber_is_zero)
+    cb_context, cb_universal_context)
 
 cdef extern from "stdlib.h":
     void free(void* ptr)
@@ -21,6 +21,8 @@ cdef extern from "k_compute.h":
     mpfr_t* k_table_c(mpfr_t h, mpfr_t S, mpfr_t P, cb_context context)
     mpfr_t* chiral_h_times_rho_to_n_c(unsigned long n, mpfr_t h, mpfr_t S, mpfr_t P, cb_context context)
     mpfr_t* chiral_h_asymptotic_c(mpfr_t S, cb_context context)
+
+cdef cython.bint RealNumber_is_zero(RealNumber num)
 
 cdef class scalar_cb_context_generic(cb_universal_context):
     cdef public object epsilon

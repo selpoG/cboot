@@ -2,8 +2,8 @@ import cython
 cimport numpy as np
 
 from sage.libs.mpfr cimport (
-    mpfr_prec_t, mpfr_t, mpfr_init2, mpfr_set, mpfr_clear, mpfr_mul,
-    mpfr_add, mpfr_add_ui, mpfr_set_ui, MPFR_RNDN, mpfr_set_zero, mpfr_zero_p)
+    mpfr_add_ui, mpfr_add, mpfr_clear, mpfr_fma, mpfr_init2, mpfr_mul,
+    mpfr_prec_t, MPFR_RNDN, mpfr_set_ui, mpfr_set_zero, mpfr_set, mpfr_t)
 from sage.rings.real_mpfr cimport RealField_class, RealNumber
 
 cdef extern from "stdlib.h":
@@ -28,10 +28,9 @@ cdef extern from "sage/cboot/context_variables.h":
     cb_context context_construct(long nMax, mpfr_prec_t prec, int Lambda)
     void clear_cb_context(cb_context context)
 
-cdef cython.bint RealNumber_is_zero(RealNumber num)
-cdef mpfr_t* pole_integral_c(x_power_max, base, pole_position, order_of_pole, mpfr_prec_t prec)
-cpdef prefactor_integral(pole_data, base, int x_power, prec, c=*)
-cpdef anti_band_cholesky_inverse(v, n_order_max, prec)
+cdef mpfr_t* __pole_integral_c(x_power_max, base, pole_position, is_double, mpfr_prec_t prec)
+cpdef __prefactor_integral(pole_data, base, int x_power, prec, c=*)
+cpdef __anti_band_cholesky_inverse(v, n_order_max, prec)
 
 cdef class cb_universal_context(object):
     cdef cb_context c_context
@@ -60,10 +59,7 @@ cdef class damped_rational(object):
     cdef public RealNumber __pref_constant
     cdef public cb_universal_context __context
 
-cdef class positive_matrix_with_prefactor(object):
+cdef class prefactor_numerator(object):
     cdef public damped_rational prefactor
     cdef public cb_universal_context context
     cdef public object matrix
-
-cdef class prefactor_numerator(positive_matrix_with_prefactor):
-    pass

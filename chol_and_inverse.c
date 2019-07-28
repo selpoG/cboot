@@ -102,3 +102,17 @@ mpfr_t* form_anti_band(mpfr_t* ab_vector, int dim, mpfr_prec_t prec) {
     }
     return res;
 }
+
+mpfr_t* anti_band_to_inverse(mpfr_t* ab_vector, int dim, mpfr_prec_t prec) {
+    mpfr_t* anti_band_mat = form_anti_band(ab_vector, dim, prec);
+    mpfr_t* cholesky_decomposed = mpfr_cholesky(anti_band_mat, dim, prec);
+    int len = dim * dim;
+    for (int i = 0; i < len; i++) {
+        mpfr_clear(anti_band_mat[i]);
+    }
+    mpfr_t* inversed = mpfr_triangular_inverse(cholesky_decomposed, dim, prec);
+    for (int i = 0; i < len; i++) {
+        mpfr_clear(cholesky_decomposed[i]);
+    }
+    return inversed;
+}

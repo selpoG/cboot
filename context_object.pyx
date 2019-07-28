@@ -482,8 +482,7 @@ def __prefactor_integral(pole_data, base, x_power, prec, c=1):
 
 @cython.ccall
 @cython.locals(
-    anti_band_input="mpfr_t*", anti_band_mat="mpfr_t*",
-    cholesky_decomposed="mpfr_t*", inversed="mpfr_t*")
+    anti_band_input="mpfr_t*", inversed="mpfr_t*", dim=cython.int)
 def __anti_band_cholesky_inverse(v, n_order_max, prec):
     field = RealField(prec)
     n_max = int(n_order_max)
@@ -491,11 +490,13 @@ def __anti_band_cholesky_inverse(v, n_order_max, prec):
         raise TypeError
     if len(v) < n_max * 2 + 1:
         print("input vector is too short..")
-        raise TypeError
+        raise ValueError
     if n_max < 0:
         print("expected n_max to be positive integer...")
-        raise TypeError
+        raise ValueError
+    dim = cython.cast(int, n_max + 1)
 
+    # prepare anti_band_input to call anti_band_to_inverse
     anti_band_input = cython.cast(
         "mpfr_t*", calloc(len(v), cython.sizeof(mpfr_t)))
     for i, val in enumerate(v):
@@ -505,38 +506,24 @@ def __anti_band_cholesky_inverse(v, n_order_max, prec):
             anti_band_input[i],
             cython.cast(mpfr_t, cython.cast(RealNumber, r).value),
             MPFR_RNDN)
-    anti_band_mat = form_anti_band(
-        anti_band_input, cython.cast(int, n_max + 1), int(prec))
+
+    inversed = anti_band_to_inverse(anti_band_input, dim, int(prec))
+
     for i, _ in enumerate(v):
         mpfr_clear(anti_band_input[i])
     free(anti_band_input)
-    cholesky_decomposed = mpfr_cholesky(
-        anti_band_mat, cython.cast(int, n_max + 1), int(prec))
-    for i in range((n_max - 1) ** 2):
-        mpfr_clear(anti_band_mat[i])
-    free(anti_band_mat)
 
-    inversed = mpfr_triangular_inverse(
-        cholesky_decomposed, cython.cast(int, n_max + 1), int(prec))
-    for i in range((n_max + 1) ** 2):
-        mpfr_clear(cholesky_decomposed[i])
-    free(cholesky_decomposed)
-
-    ans = np.ndarray((n_max + 1, n_max + 1), dtype='O')
-    for i in range(n_max + 1):
-        for j in range(n_max + 1):
-            ans[i][j] = cython.cast(
-                RealNumber, cython.cast(RealField_class, field)._new())
-            mpfr_init2(
-                cython.cast(mpfr_t, cython.cast(RealNumber, ans[i][j]).value),
-                prec)
+    # copy inverse to ans
+    ans = np.ndarray((dim, dim), dtype='O')
+    for i in range(dim):
+        for j in range(dim):
+            ans[i][j] = field(0)
             mpfr_set(
                 cython.cast(mpfr_t, cython.cast(RealNumber, ans[i][j]).value),
-                inversed[i * (n_max + 1) + j], MPFR_RNDN)
-            cython.cast(RealNumber, ans[i][j])._parent = field
-            mpfr_clear(inversed[i * (n_max + 1) + j])
-
+                inversed[i * dim + j], MPFR_RNDN)
+            mpfr_clear(inversed[i * dim + j])
     free(inversed)
+
     return ans
 
 

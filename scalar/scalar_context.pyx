@@ -23,8 +23,7 @@ if sys.version_info.major == 2:
 @cython.returns(cython.bint)
 @cython.locals(num=RealNumber)
 def RealNumber_is_zero(num):
-    return mpfr_zero_p(
-        cython.cast(mpfr_t, cython.cast(RealNumber, num).value)) != 0
+    return mpfr_zero_p(cython.cast(RealNumber, num).value) != 0
 
 
 class poleData(object):
@@ -382,12 +381,8 @@ class g_rational_approx_data_two_d(object):
         self.P = 2 * self.a * self.b
         self.context = context
         self.chiral_approx_data = k_rational_approx_data(
-            context,
-            cutoff,
-            Delta_1_2,
-            Delta_3_4,
-            is_correlator_multiple,
-            approximate_poles)
+            context, cutoff, Delta_1_2, Delta_3_4,
+            is_correlator_multiple, approximate_poles)
 
     def prefactor(self):
         __chiral_poles = set(self.chiral_approx_data.get_poles())
@@ -430,12 +425,8 @@ class g_rational_approx_data_four_d(object):
         self.P = 2 * self.a * self.b
         self.context = context
         self.chiral_approx_data = k_rational_approx_data(
-            context.k_context,
-            cutoff,
-            Delta_1_2,
-            Delta_3_4,
-            is_correlator_multiple,
-            approximate_poles)
+            context.k_context, cutoff, Delta_1_2, Delta_3_4,
+            is_correlator_multiple, approximate_poles)
 
     def prefactor(self):
         __chiral_poles = set(self.chiral_approx_data.get_poles())
@@ -527,49 +518,24 @@ class scalar_cb_context_generic(cb_universal_context):
         sig_on()
         array = hBlock_times_rho_n(
             k,
-            cython.cast(mpfr_t, cython.cast(RealNumber, self.epsilon).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, ell_c).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, Delta_c).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, S_c).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, P_c).value),
-            cython.cast(cb_context, self.c_context))
+            cython.cast(RealNumber, self.epsilon).value,
+            cython.cast(RealNumber, ell_c).value,
+            cython.cast(RealNumber, Delta_c).value,
+            cython.cast(RealNumber, S_c).value,
+            cython.cast(RealNumber, P_c).value,
+            self.c_context)
         sig_off()
-        res = np.ndarray(self.Lambda + 1, dtype='O')
-        for i in range(self.Lambda + 1):
-            res[i] = cython.cast(
-                RealNumber, cython.cast(RealField_class, self.field)._new())
-            cython.cast(RealNumber, res[i])._parent = self.field
-            mpfr_init2(
-                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
-                self.precision)
-            mpfr_set(
-                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
-                array[i], MPFR_RNDN)
-            mpfr_clear(array[i])
-        free(array)
-        return res
+        return mpfr_move_to_ndarray_1(array, self.Lambda + 1, self.field)
 
     @cython.ccall
     @cython.locals(array="mpfr_t*")
     def h_asymptotic_form(self, S):
         S_c = self(S)
         array = h_asymptotic(
-            cython.cast(mpfr_t, cython.cast(RealNumber, self.epsilon).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, S_c).value),
-            cython.cast(cb_context, self.c_context))
-        res = np.ndarray(self.Lambda + 1, dtype='O')
-        for i in range(self.Lambda + 1):
-            res[i] = cython.cast(
-                RealNumber, cython.cast(RealField_class, self.field)._new())
-            cython.cast(RealNumber, res[i])._parent = self.field
-            mpfr_init2(
-                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
-                cython.cast(mpfr_prec_t, self.precision))
-            mpfr_set(
-                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
-                array[i], MPFR_RNDN)
-            mpfr_clear(array[i])
-        return np.array(res)
+            cython.cast(RealNumber, self.epsilon).value,
+            cython.cast(RealNumber, S_c).value,
+            self.c_context)
+        return mpfr_move_to_ndarray_1(array, self.Lambda + 1, self.field)
 
     @cython.ccall
     @cython.locals(array="mpfr_t*")
@@ -595,30 +561,14 @@ class scalar_cb_context_generic(cb_universal_context):
 
         sig_on()
         array = gBlock_full(
-            cython.cast(mpfr_t, cython.cast(RealNumber, self.epsilon).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, ell_c).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, Delta_c).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, S_c).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, P_c).value),
-            cython.cast(cb_context, self.c_context))
+            cython.cast(RealNumber, self.epsilon).value,
+            cython.cast(RealNumber, ell_c).value,
+            cython.cast(RealNumber, Delta_c).value,
+            cython.cast(RealNumber, S_c).value,
+            cython.cast(RealNumber, P_c).value,
+            self.c_context)
         sig_off()
-
-        dimG = get_dimG(self.Lambda)
-        res = np.ndarray(dimG, dtype='O')
-        for i in range(dimG):
-            res[i] = cython.cast(
-                RealNumber, cython.cast(RealField_class, self.field)._new())
-            cython.cast(RealNumber, res[i])._parent = self.field
-            mpfr_init2(
-                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
-                self.precision)
-            mpfr_set(
-                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
-                array[i], MPFR_RNDN)
-            mpfr_clear(array[i])
-
-        free(array)
-        return res
+        return mpfr_move_to_ndarray_1(array, get_dimG(self.Lambda), self.field)
 
     def c2_expand(self, array_real, ell, Delta, S, P):
         """
@@ -707,21 +657,8 @@ class scalar_cb_2d_context(scalar_cb_context_generic):
     def chiral_h_asymptotic(self, S):
         S_c = self(S)
         array = chiral_h_asymptotic_c(
-            cython.cast(mpfr_t, cython.cast(RealNumber, S_c).value),
-            cython.cast(cb_context, self.c_context))
-        res = np.ndarray(self.Lambda + 1, dtype='O')
-        for i in range(self.Lambda + 1):
-            res[i] = cython.cast(
-                RealNumber, cython.cast(RealField_class, self.field)._new())
-            cython.cast(RealNumber, res[i])._parent = self.field
-            mpfr_init2(
-                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
-                cython.cast(mpfr_prec_t, self.precision))
-            mpfr_set(
-                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
-                array[i], MPFR_RNDN)
-            mpfr_clear(array[i])
-        return np.array(res)
+            cython.cast(RealNumber, S_c).value, self.c_context)
+        return mpfr_move_to_ndarray_1(array, self.Lambda + 1, self.field)
 
     @cython.ccall
     @cython.locals(n=long, array="mpfr_t*")
@@ -732,24 +669,12 @@ class scalar_cb_2d_context(scalar_cb_context_generic):
         sig_on()
         array = chiral_h_times_rho_to_n_c(
             cython.cast("unsigned long", n),
-            cython.cast(mpfr_t, cython.cast(RealNumber, h_c).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, S_c).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, P_c).value),
-            cython.cast(cb_context, self.c_context))
+            cython.cast(RealNumber, h_c).value,
+            cython.cast(RealNumber, S_c).value,
+            cython.cast(RealNumber, P_c).value,
+            self.c_context)
         sig_off()
-        res = np.ndarray(self.Lambda + 1, dtype='O')
-        for i in range(self.Lambda + 1):
-            res[i] = cython.cast(
-                RealNumber, cython.cast(RealField_class, self.field)._new())
-            cython.cast(RealNumber, res[i])._parent = self.field
-            mpfr_init2(
-                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
-                cython.cast(mpfr_prec_t, self.precision))
-            mpfr_set(
-                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
-                array[i], MPFR_RNDN)
-            mpfr_clear(array[i])
-        return np.array(res)
+        return mpfr_move_to_ndarray_1(array, self.Lambda + 1, self.field)
 
     @cython.ccall
     @cython.locals(array="mpfr_t*")
@@ -758,23 +683,11 @@ class scalar_cb_2d_context(scalar_cb_context_generic):
         P_c = self(-Delta_1_2 * Delta_3_4) / 2
         h_c = self(h)
         array = k_table_c(
-            cython.cast(mpfr_t, cython.cast(RealNumber, h_c).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, S_c).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, P_c).value),
-            cython.cast(cb_context, self.c_context))
-        res = np.ndarray(self.Lambda + 1, dtype='O')
-        for i in range(self.Lambda + 1):
-            res[i] = cython.cast(
-                RealNumber, cython.cast(RealField_class, self.field)._new())
-            cython.cast(RealNumber, res[i])._parent = self.field
-            mpfr_init2(
-                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
-                cython.cast(mpfr_prec_t, self.precision))
-            mpfr_set(
-                cython.cast(mpfr_t, cython.cast(RealNumber, res[i]).value),
-                array[i], MPFR_RNDN)
-            mpfr_clear(array[i])
-        return np.array(res)
+            cython.cast(RealNumber, h_c).value,
+            cython.cast(RealNumber, S_c).value,
+            cython.cast(RealNumber, P_c).value,
+            self.c_context)
+        return mpfr_move_to_ndarray_1(array, self.Lambda + 1, self.field)
 
     def k_rational_approx_data(self, cutoff, Delta_1_2=0, Delta_3_4=0,
                                is_correlator_multiple=False,

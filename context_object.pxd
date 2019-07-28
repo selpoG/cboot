@@ -26,6 +26,8 @@ cdef extern from "sage/cboot/context_variables.h":
     cb_context context_construct(long nMax, mpfr_prec_t prec, int Lambda)
     void clear_cb_context(cb_context context)
 
+cdef np.ndarray mpfr_move_to_ndarray_1(mpfr_t* ptr, int dim, RealField_class context)
+cdef np.ndarray mpfr_move_to_ndarray_2(mpfr_t* ptr, int dim1, int dim2, RealField_class context, bint delete)
 cdef mpfr_t* __pole_integral_c(x_power_max, base, pole_position, is_double, mpfr_prec_t prec)
 cpdef __prefactor_integral(pole_data, base, int x_power, prec, c=*)
 cpdef __anti_band_cholesky_inverse(v, n_order_max, prec)

@@ -7,7 +7,7 @@ from sage.libs.mpfr cimport (
     MPFR_RNDN, mpfr_set, mpfr_t, mpfr_zero_p)
 
 from sage.cboot.context_object cimport (
-    cb_context, cb_universal_context)
+    cb_context, cb_universal_context, mpfr_move_to_ndarray_1)
 
 cdef extern from "stdlib.h":
     void free(void* ptr)

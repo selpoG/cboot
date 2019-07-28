@@ -22,6 +22,39 @@ if sys.version_info.major == 2:
     from future_builtins import ascii, filter, hex, map, oct, zip
 
 
+@cython.cfunc
+@cython.locals(ptr="mpfr_t*", dim=cython.int, context=RealField_class)
+@cython.returns(np.ndarray)
+def mpfr_move_to_ndarray_1(ptr, dim, context):
+    res = np.ndarray(dim, dtype='O')
+    for i in range(dim):
+        res[i] = context(0)
+        mpfr_set(cython.cast(RealNumber, res[i]).value, ptr[i], MPFR_RNDN)
+        mpfr_clear(ptr[i])
+    free(ptr)
+    return res
+
+
+@cython.cfunc
+@cython.locals(
+    ptr="mpfr_t*", dim1=cython.int, dim2=cython.int,
+    context=RealField_class, delete=cython.bint)
+@cython.returns(np.ndarray)
+def mpfr_move_to_ndarray_2(ptr, dim1, dim2, context, delete):
+    res = np.ndarray((dim1, dim2), dtype='O')
+    for i in range(dim1):
+        for j in range(dim2):
+            res[i][j] = context(0)
+            mpfr_set(
+                cython.cast(RealNumber, res[i][j]).value,
+                ptr[i * dim2 + j], MPFR_RNDN)
+            if delete:
+                mpfr_clear(ptr[i * dim2 + j])
+    if delete:
+        free(ptr)
+    return res
+
+
 def is_integer(x):
     try:
         Integer(x)
@@ -81,35 +114,19 @@ class cb_universal_context(object):
     @cython.locals(Lambda=cython.int, Prec=mpfr_prec_t, nMax=cython.int)
     def __cinit__(self, Lambda, Prec, nMax, epsilon=0.0):
         # argument epsilon is not used, but it is needed (why?)
-        self.c_context = cython.cast(
-            cb_context, context_construct(nMax, Prec, Lambda))
+        self.c_context = context_construct(nMax, Prec, Lambda)
         self.precision = cython.cast(mpfr_prec_t, Prec)
-        self.field = cython.cast(RealField_class, RealField(Prec))
+        self.field = RealField(Prec)
         self.Delta_Field = self.field[str('Delta')]
         self.Delta = self.Delta_Field(str('Delta'))
         self.Lambda = Lambda
         self.maxExpansionOrder = nMax
-        self.rho_to_z_matrix = np.ndarray((Lambda + 1, Lambda + 1), dtype='O')
-
-        for i in range(Lambda + 1):
-            for j in range(Lambda + 1):
-                r = cython.cast(
-                    RealNumber, cython.cast(RealField_class, self.field)._new())
-                r._parent = self.field
-                mpfr_init2(r.value, cython.cast(mpfr_prec_t, Prec))
-                mpfr_set(
-                    r.value,
-                    cython.cast(
-                        mpfr_t,
-                        self.c_context.rho_to_z_matrix[i * (Lambda + 1) + j]),
-                    MPFR_RNDN)
-                self.rho_to_z_matrix[i][j] = r
+        self.rho_to_z_matrix = mpfr_move_to_ndarray_2(
+            self.c_context.rho_to_z_matrix,
+            Lambda + 1, Lambda + 1, self.field, False)
 
     def __deallocate__(self):
-        clear_cb_context(
-            cython.cast(
-                cb_context,
-                cython.cast(cb_universal_context, self).c_context))
+        clear_cb_context(self.c_context)
 
     @cython.locals(Lambda=cython.int, Prec=mpfr_prec_t, nMax=cython.int)
     def __init__(self, Lambda, Prec, nMax):
@@ -119,7 +136,7 @@ class cb_universal_context(object):
         # type: Function[[np.ndarray, RealNumber], np.ndarray]
         self.polynomial_vector_shift = np.vectorize(
             lambda x, shift: self.Delta_Field(x)(self.Delta + shift))
-        self.rho = 3 - 2 * sqrt(self.field(2))  # 3 - 2 sqrt(2)
+        self.rho = 3 - 2 * sqrt(self.field(2))
 
         self.zzbar_to_xy_marix = z_zbar_derivative_to_x_y_derivative_Matrix(
             self.Lambda, self.field)
@@ -402,16 +419,12 @@ def __pole_integral_c(x_power_max, base, pole_position, is_double, prec):
     if is_double != 0:
         return double_pole_case_c(
             cython.cast(long, x_power_max),
-            cython.cast(mpfr_t, cython.cast(RealNumber, b).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, a).value),
-            cython.cast(mpfr_t, cython.cast(RealNumber, igamma).value),
-            prec)
+            cython.cast(RealNumber, b).value, cython.cast(RealNumber, a).value,
+            cython.cast(RealNumber, igamma).value, prec)
     return simple_pole_case_c(
         cython.cast(long, x_power_max),
-        cython.cast(mpfr_t, cython.cast(RealNumber, b).value),
-        cython.cast(mpfr_t, cython.cast(RealNumber, a).value),
-        cython.cast(mpfr_t, cython.cast(RealNumber, igamma).value),
-        prec)
+        cython.cast(RealNumber, b).value, cython.cast(RealNumber, a).value,
+        cython.cast(RealNumber, igamma).value, prec)
 
 
 @cython.ccall
@@ -450,7 +463,7 @@ def __prefactor_integral(pole_data, base, x_power, prec, c=1):
         mpfr_init2(c_pole_data[i], prec)
         mpfr_set(
             c_pole_data[i],
-            cython.cast(mpfr_t, cython.cast(RealNumber, pole).value), MPFR_RNDN)
+            cython.cast(RealNumber, pole).value, MPFR_RNDN)
 
     decompose_coeffs = fast_partial_fraction_c(c_pole_data, is_double, n, prec)
     for i in range(n):
@@ -467,10 +480,9 @@ def __prefactor_integral(pole_data, base, x_power, prec, c=1):
             x_power, base, index_list[i][0], index_list[i][1], prec)
         for j in range(x_power + 1):
             mpfr_fma(
-                cython.cast(mpfr_t, cython.cast(RealNumber, result[j]).value),
+                cython.cast(RealNumber, result[j]).value,
                 decompose_coeffs[i], temp_mpfrs[j],
-                cython.cast(mpfr_t, cython.cast(RealNumber, result[j]).value),
-                MPFR_RNDN)
+                cython.cast(RealNumber, result[j]).value, MPFR_RNDN)
             mpfr_clear(temp_mpfrs[j])
         free(temp_mpfrs)
 
@@ -504,8 +516,7 @@ def __anti_band_cholesky_inverse(v, n_order_max, prec):
         mpfr_init2(anti_band_input[i], prec)
         mpfr_set(
             anti_band_input[i],
-            cython.cast(mpfr_t, cython.cast(RealNumber, r).value),
-            MPFR_RNDN)
+            cython.cast(RealNumber, r).value, MPFR_RNDN)
 
     inversed = anti_band_to_inverse(anti_band_input, dim, int(prec))
 
@@ -513,18 +524,7 @@ def __anti_band_cholesky_inverse(v, n_order_max, prec):
         mpfr_clear(anti_band_input[i])
     free(anti_band_input)
 
-    # copy inverse to ans
-    ans = np.ndarray((dim, dim), dtype='O')
-    for i in range(dim):
-        for j in range(dim):
-            ans[i][j] = field(0)
-            mpfr_set(
-                cython.cast(mpfr_t, cython.cast(RealNumber, ans[i][j]).value),
-                inversed[i * dim + j], MPFR_RNDN)
-            mpfr_clear(inversed[i * dim + j])
-    free(inversed)
-
-    return ans
+    return mpfr_move_to_ndarray_2(inversed, dim, dim, field, True)
 
 
 def max_index(v):

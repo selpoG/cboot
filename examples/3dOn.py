@@ -33,8 +33,8 @@ def make_F(delta, sector, spin, gap_dict, NSO):
         gap = 2 * context.epsilon + spin
     g_shift = cbs[spin].shift(gap)
 
-    g_num = g_shift.matrix
-    g_pref = g_shift.prefactor
+    g_num = g_shift.matrix()
+    g_pref = g_shift.prefactor()
     F = context.F_minus_matrix(delta).dot(g_num)
     H = context.F_plus_matrix(delta).dot(g_num)
 

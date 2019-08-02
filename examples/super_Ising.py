@@ -53,7 +53,7 @@ def cSCblock(nu_max, spin, Delta=None):
             for x in poles:
                 g = g / (Delta - context(x))
             for x in factors:
-                g *= (Delta - context(x))
+                g *= Delta - context(x)
             g = g * C
         res_g += g
         if shift[0] % 2 != 0:

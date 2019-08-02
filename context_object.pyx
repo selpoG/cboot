@@ -71,6 +71,14 @@ def get_dimG(Lambda):
     return ((Lambda + 2) ** 2) // 4
 
 
+def check_set(m, k, v):
+    # type: (Dict[Key, Value], Key, Value) -> bool
+    if k not in m:
+        m[k] = v
+        return True
+    return m[k] == v
+
+
 def z_zbar_derivative_to_x_y_derivative_Matrix(Lambda, field=RealField(400)):
     # type: (int, RealField_class) -> np.ndarray
     # ret.shape = (dimG, dimG), ret.dtype = RealNumber
@@ -136,7 +144,7 @@ class cb_universal_context(object):
         # type: Function[[np.ndarray, RealNumber], np.ndarray]
         self.polynomial_vector_shift = np.vectorize(
             lambda x, shift: self.Delta_Field(x)(self.Delta + shift))
-        self.rho = 3 - 2 * sqrt(self.field(2))
+        self.rho = 3 - 2 * sqrt(self(2))
 
         self.zzbar_to_xy_marix = z_zbar_derivative_to_x_y_derivative_Matrix(
             self.Lambda, self.field)
@@ -150,8 +158,8 @@ class cb_universal_context(object):
             self.rho_to_delta[i] = self.rho_to_delta[i - 1] * \
                 (self.Delta + 1 - i) / (self.rho * i)
         self.rho_to_delta = self.rho_to_z_matrix.dot(self.rho_to_delta)
-        self.null_ftype = np.full(self.dim_f(), self.field(0))
-        self.null_htype = np.full(self.dim_h(), self.field(0))
+        self.null_ftype = np.full(self.dim_f(), self(0))
+        self.null_htype = np.full(self.dim_h(), self(0))
 
     @staticmethod
     def __triangle(n):
@@ -182,8 +190,8 @@ class cb_universal_context(object):
             repr(self.maxExpansionOrder))
 
     def identity_vector(self):
-        res = np.concatenate([self.null_ftype, self.null_htype])
-        res[0] = self.field(1)
+        res = np.full(get_dimG(self.Lambda), self(0))
+        res[0] = self(1)
         return res
 
     def __v_to_d(self, d):
@@ -218,7 +226,7 @@ class cb_universal_context(object):
             return (self.Lambda + 2 - x[0]) * x[0] + x[1]
 
         local_v = self.__v_to_d(d)
-        return ((self.field(1) / 4) ** d) * np.array([
+        return ((self(1) / 4) ** d) * np.array([
             np.array([
                 local_v[aligned_index(i - m)]
                 if (i - m)[0] >= 0 and (i - m)[1] >= 0
@@ -281,21 +289,20 @@ class cb_universal_context(object):
                     raise RuntimeError("unequal dim")
                 for j, x in enumerate(row):
                     if isinstance(x, prefactor_numerator):
-                        len_x = x.matrix.shape[0]
+                        len_x = x.shape()[0]
                         pns.append(x)
                         pnindices.append((n, i, j))
                     else:
                         len_x = int(x)
-                        bodies[(n, i, j)] = np.full(len_x, self(0), dtype='O')
-                    if n not in dims:
-                        dims[n] = len_x
-                    elif dims[n] != len_x:
+                        bodies[(n, i, j)] = np.full(len_x, self(0))
+                    if not check_set(dims, n, len_x):
                         raise RuntimeError(
                             "Input has inconsistent dimensions.")
-        respref_poles = damped_rational.poles_max(pn.prefactor for pn in pns)
+        respref_poles = damped_rational.poles_max(pn.prefactor() for pn in pns)
         respref = self.damped_rational(respref_poles)
         for i, pn in zip(pnindices, pns):
-            bodies[i] = respref.div(pn.prefactor).denom(self.Delta) * pn.matrix
+            bodies[i] = (respref / pn.prefactor()
+                         ).denom(self.Delta) * pn.matrix()
         res = np.ndarray((nrow, nrow, sum(dims[x] for x in dims)), dtype='O')
         for i in range(nrow):
             for j in range(nrow):
@@ -329,16 +336,12 @@ class cb_universal_context(object):
                 for i, row in enumerate(pmat):
                     for j, x in enumerate(row):
                         if isinstance(x, prefactor_numerator):
-                            if n not in dims:
-                                dims[n] = x.matrix.shape[0]
-                            elif dims[n] != x.matrix.shape[0]:
+                            if not check_set(dims, n, x.shape()[0]):
                                 raise RuntimeError(
                                     "Found inconsistent dimension.")
                         elif isinstance(x, np.ndarray):
                             pmat[i][j] = self.vector_to_prefactor_numerator(x)
-                            if n not in dims:
-                                dims[n] = x.shape[0]
-                            elif dims[n] != x.shape[0]:
+                            if not check_set(dims, n, x.shape[0]):
                                 raise RuntimeError(
                                     "Found inconsistent dimension.")
                         else:
@@ -362,7 +365,7 @@ class cb_universal_context(object):
                         raise RuntimeError("Found inconsistent dimension.")
                     norm_list.append(v)
                 elif v == 0:
-                    norm_list.append(np.full(dims[n], self(0), dtype='O'))
+                    norm_list.append(np.full(dims[n], self(0)))
             norm = np.concatenate(norm_list)
         else:
             raise NotImplementedError
@@ -376,13 +379,13 @@ class cb_universal_context(object):
                         raise RuntimeError("Found inconsistent dimension.")
                     obj_list.append(v)
                 elif v == 0:
-                    obj_list.append(np.full(dims[n], self(0), dtype='O'))
+                    obj_list.append(np.full(dims[n], self(0)))
             obj = np.concatenate(obj_list)
         else:
             if not is_integer(objective) or Integer(objective) != 0:
                 raise NotImplementedError(
                     "Got unrecognizable input for objective")
-            obj = np.full(sum(dims[n] for n in dims), self(0), dtype='O')
+            obj = np.full(sum(dims[n] for n in dims), self(0))
         return self.SDP(norm, obj, [self.join(sv) for sv in res])
 
     def dot(self, x, y):
@@ -390,14 +393,14 @@ class cb_universal_context(object):
         # so I cannot override np.dot
         if isinstance(x, prefactor_numerator):
             if isinstance(y, prefactor_numerator):
-                pref = x.prefactor * y.prefactor
+                pref = x.prefactor() * y.prefactor()
                 return prefactor_numerator(
-                    pref, np.dot(x.matrix, y.matrix), self)
-            return prefactor_numerator(x.prefactor, np.dot(x.matrix, y), self)
+                    pref, np.dot(x.matrix(), y.matrix()), self)
+            return prefactor_numerator(x.prefactor(), np.dot(x.matrix(), y), self)
         else:
             if isinstance(y, prefactor_numerator):
                 return prefactor_numerator(
-                    y.prefactor, np.dot(x, y.matrix), self)
+                    y.prefactor(), np.dot(x, y.matrix()), self)
             return np.dot(x, y)
 
 
@@ -417,6 +420,8 @@ def __pole_integral_c(x_power_max, base, pole_position, is_double, prec):
     a = field(pole_position)
     b = field(base)
     if is_double != 0:
+        if a == 0:
+            raise RuntimeError("diverging and double_pole_case!")
         return double_pole_case_c(
             cython.cast(long, x_power_max),
             cython.cast(RealNumber, b).value, cython.cast(RealNumber, a).value,
@@ -590,12 +595,12 @@ def write_vector(file_stream, name, vector):
 def write_polynomial(file_stream, polynomial):
     file_stream.write("<polynomial>\n")
     if isinstance(polynomial, RealNumber):
-        __temp = [polynomial]
+        tmp = [polynomial]
     else:
-        __temp = polynomial.list()
-        if __temp == []:
-            __temp = [0]
-    for x in __temp:
+        tmp = polynomial.list()
+        if tmp == []:
+            tmp = [0]
+    for x in tmp:
         write_real_num(file_stream, x, "coeff")
     file_stream.write("</polynomial>\n")
 
@@ -751,27 +756,23 @@ class damped_rational(object):
 
     def __mul__(self, y):
         # type: (damped_rational) -> damped_rational
-        if not isinstance(y, damped_rational):
+        if not isinstance(self, damped_rational) or not isinstance(y, damped_rational):
             raise NotImplementedError
         res_poles = damped_rational.poles_add((self.__poles, y.__poles))
         new_base = self.__base * y.__base
         new_const = self.__pref_constant * y.__pref_constant
         return damped_rational(res_poles, new_base, new_const, self.__context)
 
-    def div(self, y):
-        # type: (damped_rational) -> damped_rational
-        if not isinstance(y, damped_rational):
+    def __div__(self, y):
+        return self.__truediv__(y)
+
+    def __truediv__(self, y):
+        if not isinstance(self, damped_rational) or not isinstance(y, damped_rational):
             raise NotImplementedError
         res_poles = damped_rational.poles_subtract(self.__poles, (y.__poles, ))
         new_base = self.__base / y.__base
         new_const = self.__pref_constant / y.__pref_constant
         return damped_rational(res_poles, new_base, new_const, self.__context)
-
-    def __div__(self, y):
-        return self.div(y)
-
-    def __truediv__(self, y):
-        return self.div(y)
 
     # this method does not change self
     def add_poles(self, location):
@@ -828,35 +829,49 @@ class prefactor_numerator(object):
 
     @cython.locals(prefactor=damped_rational, context=cb_universal_context)
     def __cinit__(self, prefactor, matrix, context):
-        self.prefactor = prefactor
-        self.context = context
+        self.__prefactor = prefactor  # type: damped_rational
+        self.__context = context
 
     @cython.locals(prefactor=damped_rational)
     def __init__(self, prefactor, matrix, context):
-        self.matrix = matrix
+        # shape of matrix must be (n, ) or (k, k, n)
+        # each element is a polynomial of Delta (sage.rings.polynomial.polynomial_real_mpfr_dense.PolynomialRealDense) or RealNumber
+        self.__matrix = matrix  # type: np.ndarray
+        assert len(matrix.shape) == 1 or \
+            (len(matrix.shape) == 3 and matrix.shape[0] == matrix.shape[1]), \
+            "unexpected shape {0}".format(matrix.shape)
+
+    def prefactor(self):
+        return self.__prefactor
+
+    def matrix(self):
+        return self.__matrix
+
+    def shape(self):
+        return self.__matrix.shape
 
     def shift(self, x):
         return prefactor_numerator(
-            self.prefactor.shift(x),
-            self.context.polynomial_vector_shift(self.matrix, x), self.context)
+            self.__prefactor.shift(x),
+            self.__context.polynomial_vector_shift(self.__matrix, x), self.__context)
 
     def degree_max(self):
         return max(
             (np.vectorize(
-                lambda y: self.context.Delta_Field(y).degree())(
-                self.matrix)).flatten())
+                lambda y: self.__context.Delta_Field(y).degree())(
+                self.__matrix)).flatten())
 
     def write(self, file_stream, v):
         shuffled_matrix = np.array(
             [
                 [normalizing_component_subtract(y, v) for y in x]
-                for x in self.matrix])
+                for x in self.__matrix])
         sample_points = laguerre_sample_points(
-            self.degree_max() + 1, self.context, self.context.rho)
-        sample_scalings = map(self.prefactor, sample_points)
+            self.degree_max() + 1, self.__context, self.__prefactor.__base / 4)
+        sample_scalings = map(self.__prefactor, sample_points)
         orthogonal_polynomial_vector = map(
-            self.context.Delta_Field,
-            self.prefactor.orthogonal_polynomial(self.degree_max()))
+            self.__context.Delta_Field,
+            self.__prefactor.orthogonal_polynomial(self.degree_max()))
 
         file_stream.write("<polynomialVectorMatrix>\n")
         file_stream.write("<rows>\n")
@@ -880,26 +895,31 @@ class prefactor_numerator(object):
 
     def reshape(self):
         if len(
-                self.matrix.shape) == 3 and self.matrix.shape[0] == self.matrix.shape[1]:
+                self.__matrix.shape) == 3 and self.__matrix.shape[0] == self.__matrix.shape[1]:
             return self
-        new_b = self.matrix.reshape((1, 1, self.matrix.shape[-1]))
-        return prefactor_numerator(self.prefactor, new_b, self.context)
+        new_b = self.__matrix.reshape((1, 1, self.__matrix.size))
+        new = prefactor_numerator(self.__prefactor, new_b, self.__context)
+        self.__matrix = None
+        self.__prefactor = None
+        self.__context = None
+        # if reshape happens, self is no longer available
+        return new
 
     def __str__(self):
-        return "{0}\n*{1}".format(self.prefactor, self.matrix)
+        return "{0}\n*{1}".format(self.__prefactor, self.__matrix)
 
     def __repr__(self):
         return "prefactor_numerator" \
             "(prefactor={0}, matrix={1}, context={2})".format(
-                repr(self.prefactor), repr(self.matrix), repr(self.context))
+                repr(self.__prefactor), repr(self.__matrix), repr(self.__context))
 
     def add_poles(self, poles):
-        new_pref = self.prefactor.add_poles(poles)
-        return prefactor_numerator(new_pref, self.matrix, self.context)
+        new_pref = self.__prefactor.add_poles(poles)
+        return prefactor_numerator(new_pref, self.__matrix, self.__context)
 
     def rdot(self, M):
         return prefactor_numerator(
-            self.prefactor, M.dot(self.matrix), self.context)
+            self.__prefactor, M.dot(self.__matrix), self.__context)
 
     def multiply_factored_polynomial(self, factors, C):
         """
@@ -907,71 +927,58 @@ class prefactor_numerator(object):
         where x in factors
         """
         # multiplication is equivalent to division by div
-        div = damped_rational(factors, 1, 1 / self.context(C), self.context)
-        gcd = damped_rational.gcd(self.prefactor, div)
+        div = damped_rational(
+            factors, 1, 1 / self.__context(C), self.__context)
+        gcd = damped_rational.gcd(self.__prefactor, div)
         # reduce common factor
-        new_pref = self.prefactor.div(gcd)
-        div = div.div(gcd)
+        new_pref = self.__prefactor / gcd
+        div = div / gcd
         # division by div is equivalent to multiplication by div.denom
         return prefactor_numerator(
             new_pref,
-            div.denom(
-                self.context.Delta) *
-            self.matrix,
-            self.context)
+            div.denom(self.__context.Delta) * self.__matrix,
+            self.__context)
 
     def multiply_factored_rational(self, poles, factors, C):
         return self.add_poles(poles).multiply_factored_polynomial(factors, C)
 
-    @staticmethod
-    def __mul_impl(x, pn):
-        return prefactor_numerator(pn.prefactor, x * pn.matrix, pn.context)
-
     def __mul__(self, x):
-        if isinstance(self, prefactor_numerator):
-            return prefactor_numerator.__mul_impl(x, self)
-        if isinstance(x, prefactor_numerator):
-            return prefactor_numerator.__mul_impl(self, x)
-        print("type(self) = {0}, type(x) = {1}".format(type(self), type(x)))
-        raise NotImplementedError
+        if not isinstance(self, prefactor_numerator):
+            return x.__mul__(self)
+        return prefactor_numerator(self.__prefactor, x * self.__matrix, self.__context)
 
     def __pos__(self):
-        return prefactor_numerator(self.prefactor, +self.matrix, self.context)
+        return prefactor_numerator(self.__prefactor, +self.__matrix, self.__context)
 
     def __neg__(self):
-        return prefactor_numerator(self.prefactor, -self.matrix, self.context)
+        return prefactor_numerator(self.__prefactor, -self.__matrix, self.__context)
 
     def __div__(self, x):
-        return prefactor_numerator(
-            self.prefactor,
-            self.matrix /
-            self.context(x),
-            self.context)
+        return self.__truediv__(x)
 
     def __truediv__(self, x):
+        if not isinstance(self, prefactor_numerator):
+            raise NotImplementedError
         return prefactor_numerator(
-            self.prefactor,
-            self.matrix /
-            self.context(x),
-            self.context)
+            self.__prefactor, self.__matrix / self.__context(x), self.__context)
 
     def __add__(self, other):
-        if not isinstance(other, prefactor_numerator):
+        if not isinstance(other, prefactor_numerator) or not isinstance(self, prefactor_numerator):
             raise NotImplementedError
-        new_pref = self.prefactor.lcm(other.prefactor)
-        rem1 = new_pref.div(self.prefactor).denom(self.context.Delta)
-        rem2 = new_pref.div(other.prefactor).denom(self.context.Delta)
-        new_matrix = rem1 * self.matrix + rem2 * other.matrix
-        return prefactor_numerator(new_pref, new_matrix, self.context)
+        new_pref = self.__prefactor.lcm(other.__prefactor)
+        rem1 = (new_pref / self.__prefactor).denom(self.__context.Delta)
+        rem2 = (new_pref / other.__prefactor).denom(self.__context.Delta)
+        new_matrix = rem1 * self.__matrix + rem2 * other.__matrix
+        return prefactor_numerator(new_pref, new_matrix, self.__context)
 
     def __sub__(self, x):
-        if not isinstance(x, prefactor_numerator):
+        if not isinstance(x, prefactor_numerator) or not isinstance(self, prefactor_numerator):
             raise NotImplementedError
         return self.__add__(x.__neg__())
 
     def __call__(self, x):
-        pref = self.prefactor(x)
-        body = self.context.polynomial_vector_evaluate(self.matrix, x)
+        pref = self.__prefactor(x)
+        body = self.__context.polynomial_vector_evaluate(self.__matrix, x)
         return pref * body
 
 
@@ -988,7 +995,7 @@ def functional_to_spectra(ef_path, problem, context, label=None):
     norm = problem.normalization
     pvm = problem.pvm
     alpha = efm_from_sdpb_output(ef_path, norm, context)
-    polys = [matrix(x.matrix.dot(alpha)).det() for x in pvm]
+    polys = [matrix(x.matrix().dot(alpha)).det() for x in pvm]
     if label is None:
         label = range(len(polys))
     return [find_local_minima(p, l) for p, l in zip(polys, label)]

@@ -25,7 +25,7 @@ cdef extern from "k_compute.h":
 cdef cython.bint RealNumber_is_zero(RealNumber num)
 
 cdef class scalar_cb_context_generic(cb_universal_context):
-    cdef public object epsilon
+    cdef readonly object epsilon
     cpdef h_times_rho_k(self, unsigned long k, ell, Delta, S, P)
     cpdef h_asymptotic_form(self, S)
     cpdef gBlock(self, ell, Delta, Delta_1_2, Delta_3_4)
@@ -36,6 +36,6 @@ cdef class scalar_cb_2d_context(scalar_cb_context_generic):
     cpdef k_table(self, h, Delta_1_2, Delta_3_4)
 
 cdef class scalar_cb_4d_context(scalar_cb_context_generic):
-    cdef public scalar_cb_2d_context k_context
-    cdef public object zzbar_anti_symm_to_xy_matrix
+    cdef readonly scalar_cb_2d_context k_context
+    cdef readonly object zzbar_anti_symm_to_xy_matrix
     cpdef chiral_h_times_rho_to_n(self, long n, h, Delta_1_2=*, Delta_3_4=*)

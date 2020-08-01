@@ -407,7 +407,7 @@ class cb_universal_context(object):
 @cython.cfunc
 @cython.returns("mpfr_t*")
 @cython.locals(prec=mpfr_prec_t)
-def __pole_integral_c(x_power_max, base, pole_position, is_double, prec):
+def __pole_integral_c(x_power_max, base, pole_position, prec):
     field = RealField(prec)
     field2 = RealField(2 * prec)
     a = field2(pole_position)
@@ -419,13 +419,6 @@ def __pole_integral_c(x_power_max, base, pole_position, is_double, prec):
     igamma = field(igamma)  # incomplete gamma
     a = field(pole_position)
     b = field(base)
-    if is_double != 0:
-        if a == 0:
-            raise RuntimeError("diverging and double_pole_case!")
-        return double_pole_case_c(
-            cython.cast(long, x_power_max),
-            cython.cast(RealNumber, b).value, cython.cast(RealNumber, a).value,
-            cython.cast(RealNumber, igamma).value, prec)
     return simple_pole_case_c(
         cython.cast(long, x_power_max),
         cython.cast(RealNumber, b).value, cython.cast(RealNumber, a).value,
@@ -433,68 +426,37 @@ def __pole_integral_c(x_power_max, base, pole_position, is_double, prec):
 
 
 @cython.ccall
-@cython.locals(
-    x_power=cython.int, n=cython.int, number_of_factors=cython.int,
-    c_pole_data="mpfr_t*", is_double="int*", temp_mpfrs="mpfr_t*")
-def __prefactor_integral(pole_data, base, x_power, prec, c=1):
-    # type: (Dict[RealNumber, int], RealNumber, Integer, int, RealNumber) -> np.ndarray
+@cython.locals(x_power=cython.int, n=cython.int, temp_mpfrs="mpfr_t*")
+def __prefactor_integral(poles, base, x_power, prec, c):
+    # type: (List[RealNumber], RealNumber, Integer, int, RealNumber) -> np.ndarray
     field = RealField(prec)
-    n = len(pole_data)
-    number_of_factors = n
+    n = len(poles)
     assert 0 < base < 1, "base must be in (0,1), but is {0}".format(base)
+    result = np.ndarray(x_power + 1, dtype='O')
     if n == 0:
-        minus_ln_b = -1 / log(base)
-        result = np.ndarray(x_power + 1, dtype='O')
-        result[0] = minus_ln_b * c
-        for i in range(1, x_power + 1):
-            result[i] = result[i - 1] * minus_ln_b * i
+        assert x_power == 0, "x_power is {0} with empty poles".format(x_power)
+        result[0] = -c / log(base)
         return result
 
-    index_list = []
-    c_pole_data = cython.cast("mpfr_t*", calloc(n, cython.sizeof(mpfr_t)))
-    is_double = cython.cast("int*", calloc(n, cython.sizeof(int)))
-    for i, pole in enumerate(pole_data):
-        if pole > 0:
-            raise ArithmeticError(
-                "There exists a pole on the integration contour of the prefactor!")
-        if pole_data[pole] == 2:
-            index_list.append([pole, 1])
-            is_double[i] = 1
-            number_of_factors += 1
-        elif pole_data[pole] != 1:
-            raise NotImplementedError
-        index_list.append([pole, 0])
-
-        mpfr_init2(c_pole_data[i], prec)
-        mpfr_set(
-            c_pole_data[i],
-            cython.cast(RealNumber, pole).value, MPFR_RNDN)
-
-    decompose_coeffs = fast_partial_fraction_c(c_pole_data, is_double, n, prec)
-    for i in range(n):
-        mpfr_clear(c_pole_data[i])
-    free(c_pole_data)
-    free(is_double)
-
-    result = np.ndarray(x_power + 1, dtype='O')
     for i in range(x_power + 1):
         result[i] = field(0)
 
-    for i in range(number_of_factors):
-        temp_mpfrs = __pole_integral_c(
-            x_power, base, index_list[i][0], index_list[i][1], prec)
+    for i, pole in enumerate(poles):
+        temp_mpfrs = __pole_integral_c(x_power, base, pole, prec)
+        coef = field(1)
+        for j in range(n):
+            if j != i:
+                coef *= pole - poles[j]
+        coef = c / coef
         for j in range(x_power + 1):
             mpfr_fma(
                 cython.cast(RealNumber, result[j]).value,
-                decompose_coeffs[i], temp_mpfrs[j],
+                cython.cast(RealNumber, coef).value, temp_mpfrs[j],
                 cython.cast(RealNumber, result[j]).value, MPFR_RNDN)
             mpfr_clear(temp_mpfrs[j])
         free(temp_mpfrs)
 
-    for i in range(number_of_factors):
-        mpfr_clear(decompose_coeffs[i])
-    free(decompose_coeffs)
-    return c * result
+    return result
 
 
 @cython.ccall
@@ -676,9 +638,12 @@ class damped_rational(object):
             1 / self.__pref_constant)
 
     def orthogonal_polynomial(self, order):
+        deg = self.__context.Lambda + len(self.__poles) if self.__poles else 0
+        assert order == deg, "max degree is {0}, while lambda = {1} and len(poles) = {2}".format(
+            order, self.__context.Lambda, len(self.__poles))
         return __anti_band_cholesky_inverse(
             __prefactor_integral(
-                self.__poles, self.__base, order,
+                list(self.__poles), self.__base, order,
                 self.__context.precision, self.__pref_constant),
             order // 2, self.__context.precision)
 

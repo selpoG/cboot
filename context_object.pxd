@@ -12,10 +12,9 @@ cdef extern from "stdlib.h":
 
 cdef extern from "sage/cboot/integral_decomp.h":
     mpfr_t* simple_pole_case_c(long pole_order_max, mpfr_t base, mpfr_t pole_position, mpfr_t incomplete_gamma_factor, mpfr_prec_t prec)
-    mpfr_t* double_pole_case_c(long pole_order_max, mpfr_t base, mpfr_t pole_position, mpfr_t incomplete_gamma_factor, mpfr_prec_t prec)
 
 cdef extern from "sage/cboot/partial_fraction.h":
-    mpfr_t* fast_partial_fraction_c(const mpfr_t* pole_locations, const int* double_or_single, int expected_result_length, mpfr_prec_t prec)
+    mpfr_t* fast_partial_fraction_c(const mpfr_t* pole_locations, int expected_result_length, mpfr_prec_t prec)
 
 cdef extern from "sage/cboot/chol_and_inverse.h":
     mpfr_t* anti_band_to_inverse(const mpfr_t* ab_vector, int dim, mpfr_prec_t prec)
@@ -28,8 +27,8 @@ cdef extern from "sage/cboot/context_variables.h":
 
 cdef np.ndarray mpfr_move_to_ndarray_1(mpfr_t* ptr, int dim, RealField_class context)
 cdef np.ndarray mpfr_move_to_ndarray_2(mpfr_t* ptr, int dim1, int dim2, RealField_class context, bint delete)
-cdef mpfr_t* __pole_integral_c(x_power_max, base, pole_position, is_double, mpfr_prec_t prec)
-cpdef __prefactor_integral(pole_data, base, int x_power, prec, c=*)
+cdef mpfr_t* __pole_integral_c(x_power_max, base, pole_position, mpfr_prec_t prec)
+cpdef __prefactor_integral(poles, base, int x_power, prec, c)
 cpdef __anti_band_cholesky_inverse(v, n_order_max, prec)
 
 cdef class cb_universal_context(object):
